@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, LogOut, MessageSquare, Phone, UserPlus, PhoneCall, Video, Camera, Plus, X, Globe, Eye, Image } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
+import { API_BASE_URL } from '../config';
 
 export default function Sidebar({
   currentUser,
@@ -64,7 +65,7 @@ export default function Sidebar({
   // Fetch calls logs
   const fetchCallLogs = async () => {
     try {
-      const res = await fetch('http://localhost:5000/users/calls', {
+      const res = await fetch(`${API_BASE_URL}/users/calls`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -79,7 +80,7 @@ export default function Sidebar({
   // Fetch status updates
   const fetchStatusFeed = async () => {
     try {
-      const res = await fetch('http://localhost:5000/users/status', {
+      const res = await fetch(`${API_BASE_URL}/users/status`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -106,7 +107,7 @@ export default function Sidebar({
       if (searchQuery.trim().length > 0) {
         setIsSearching(true);
         try {
-          const res = await fetch(`http://localhost:5000/users/search?q=${encodeURIComponent(searchQuery)}`, {
+          const res = await fetch(`${API_BASE_URL}/users/search?q=${encodeURIComponent(searchQuery)}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           const data = await res.json();
@@ -158,7 +159,7 @@ export default function Sidebar({
   // Select a user from search results
   const handleSelectSearchResult = async (user) => {
     try {
-      const res = await fetch('http://localhost:5000/users/contacts/add', {
+      const res = await fetch(`${API_BASE_URL}/users/contacts/add`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +205,7 @@ export default function Sidebar({
 
     setProfileLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/users/profile', {
+      const res = await fetch(`${API_BASE_URL}/users/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,7 +267,7 @@ export default function Sidebar({
         media_url: statusType === 'image' ? mediaUrl : statusBgGradient // Use media_url for gradient styles if text!
       };
 
-      const res = await fetch('http://localhost:5000/users/status', {
+      const res = await fetch(`${API_BASE_URL}/users/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -827,7 +828,7 @@ export default function Sidebar({
             ) : (
               /* Render Image story */
               <div style={styles.fullStoryImageWrapper}>
-                <img src={`http://localhost:5000${activeStory.media_url}`} alt="status story" style={styles.fullStoryImage} />
+                <img src={activeStory.media_url.startsWith('http') ? activeStory.media_url : `${API_BASE_URL}${activeStory.media_url}`} alt="status story" style={styles.fullStoryImage} />
                 {activeStory.content && activeStory.content.trim() !== '' && (
                   <div style={styles.fullStoryCaptionCard}>
                     <p>{activeStory.content}</p>

@@ -3,6 +3,7 @@ import { Phone, Video, Send, Check, CheckCheck, Smile, Paperclip, X, FileText, P
 import EmojiPicker from 'emoji-picker-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
+import { API_BASE_URL } from '../config';
 
 export default function ChatWindow({
   activeChat,
@@ -30,7 +31,7 @@ export default function ChatWindow({
 
   const fetchCustomStickers = async () => {
     try {
-      const res = await fetch('http://localhost:5000/users/stickers', {
+      const res = await fetch(`${API_BASE_URL}/users/stickers`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -64,7 +65,7 @@ export default function ChatWindow({
   // Load message logs when activeChat updates
   const loadMessageHistory = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/users/messages/${activeChat.id}`, {
+      const res = await fetch(`${API_BASE_URL}/users/messages/${activeChat.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -221,7 +222,7 @@ export default function ChatWindow({
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      const saveRes = await fetch('http://localhost:5000/users/stickers', {
+      const saveRes = await fetch(`${API_BASE_URL}/users/stickers`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -437,7 +438,7 @@ export default function ChatWindow({
                     <div style={styles.attachmentContainer}>
                       {msg.attachment_type === 'sticker' && (
                         <img
-                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`}
+                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
                           alt="sticker"
                           style={{ width: '120px', height: '120px', display: 'block' }}
                         />
@@ -453,7 +454,7 @@ export default function ChatWindow({
                             }}
                             onClick={() => {
                               if (!isMe && !msg.is_opened) {
-                                const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`;
+                                const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`;
                                 setViewOnceImage({ id: msg.id, url: fullUrl });
                               }
                             }}
@@ -465,11 +466,11 @@ export default function ChatWindow({
                           </div>
                         ) : (
                           <img
-                            src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`}
+                            src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
                             alt={msg.attachment_name}
                             style={styles.bubbleImage}
                             onClick={() => {
-                              const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`;
+                              const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`;
                               window.open(fullUrl, '_blank');
                             }}
                           />
@@ -478,7 +479,7 @@ export default function ChatWindow({
                       
                       {msg.attachment_type === 'video' && (
                         <video
-                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`}
+                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
                           controls
                           style={styles.bubbleVideo}
                         />
@@ -486,7 +487,7 @@ export default function ChatWindow({
 
                       {msg.attachment_type === 'document' && (
                         <a
-                          href={msg.attachment_url.startsWith('http') ? msg.attachment_url : `http://localhost:5000${msg.attachment_url}`}
+                          href={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={styles.bubbleDoc}
@@ -628,10 +629,10 @@ export default function ChatWindow({
                   {customStickers.map((url, i) => (
                     <img
                       key={`custom-${i}`}
-                      src={`http://localhost:5000${url}`}
+                      src={url.startsWith('http') ? url : `${API_BASE_URL}${url}`}
                       alt={`custom-sticker-${i}`}
                       style={styles.stickerThumb}
-                      onClick={() => handleSendSticker(`http://localhost:5000${url}`)}
+                      onClick={() => handleSendSticker(url.startsWith('http') ? url : `${API_BASE_URL}${url}`)}
                       className="clickable"
                     />
                   ))}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { API_BASE_URL } from '../config';
 
 export default function LoginRegister({ onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -32,7 +33,7 @@ export default function LoginRegister({ onLogin }) {
         ? { email, firebase_uid: firebaseUser.uid, display_name: displayName }
         : { firebase_uid: firebaseUser.uid };
 
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

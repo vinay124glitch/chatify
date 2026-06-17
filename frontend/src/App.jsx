@@ -6,6 +6,7 @@ import LoginRegister from './components/LoginRegister';
 import CallOverlay from './components/CallOverlay';
 import useWebRTC from './hooks/useWebRTC';
 import { Shield, MessageSquare, PhoneCall } from 'lucide-react';
+import { API_BASE_URL } from './config';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('whatsapp_token'));
@@ -18,7 +19,7 @@ export default function App() {
   // Fetch current user details on start
   const fetchCurrentUser = useCallback(async (authToken) => {
     try {
-      const res = await fetch('http://localhost:5000/auth/me', {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${authToken}` }
       });
       if (res.ok) {
@@ -45,7 +46,7 @@ export default function App() {
   const fetchContacts = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch('http://localhost:5000/users/contacts', {
+      const res = await fetch(`${API_BASE_URL}/users/contacts`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -77,7 +78,7 @@ export default function App() {
   // Connect to Socket.io when authenticated
   useEffect(() => {
     if (token && currentUser) {
-      const newSocket = io('http://localhost:5000', {
+      const newSocket = io(API_BASE_URL, {
         auth: { token }
       });
 
