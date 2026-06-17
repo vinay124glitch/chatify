@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-webrtc-clone",
+  "version": "1.0.0",
+  "description": "WhatsApp-like messaging and calling application using WebRTC, Socket.io, React and SQLite",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm start",
+    "frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

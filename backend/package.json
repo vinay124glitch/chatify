@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-backend",
+  "version": "1.0.0",
+  "description": "Backend for WhatsApp calling and messaging application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
+    "pg": "^8.21.0",
+    "socket.io": "^4.7.5"
+  }
+}
