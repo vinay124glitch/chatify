@@ -84,12 +84,44 @@ const base64ToBlob = (base64String, mimeType = 'image/jpeg') => {
   }
 };
 
-// Upload a base64/blob image to Firebase Storage and return the download URL
-const uploadImageToFirebase = async (base64String, path) => {
+// Upload any file or blob to the local backend uploads directory
+const uploadFileToBackend = async (fileOrBlob, fileName, token) => {
+  console.log('[BackendUpload] Starting fallback upload to backend...');
+  try {
+    const formData = new FormData();
+    const file = fileOrBlob instanceof File 
+      ? fileOrBlob 
+      : new File([fileOrBlob], fileName || 'upload.jpg', { type: fileOrBlob.type || 'image/jpeg' });
+    
+    formData.append('file', file);
+    
+    const res = await fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}`);
+    }
+    const data = await res.json();
+    console.log('[BackendUpload] Backend upload successful. URL:', data.url);
+    return data.url;
+  } catch (err) {
+    console.error('[BackendUpload] Fallback upload failed:', err);
+    throw err;
+  }
+};
+
+// Upload a base64/blob image to Firebase Storage (with automatic backend fallback)
+const uploadImageToFirebase = async (base64String, path, token) => {
   console.log('[FirebaseUpload] Starting upload to path:', path);
+  let blob = null;
   try {
     console.log('[FirebaseUpload] Converting base64 to blob...');
-    const blob = base64ToBlob(base64String, 'image/jpeg');
+    blob = base64ToBlob(base64String, 'image/jpeg');
     console.log('[FirebaseUpload] Blob created successfully, size:', blob.size);
 
     const storageRef = ref(storage, path);
@@ -108,8 +140,16 @@ const uploadImageToFirebase = async (base64String, path) => {
     console.log('[FirebaseUpload] Download URL retrieved:', downloadURL);
     return downloadURL;
   } catch (err) {
-    console.error('[FirebaseUpload] Error during upload process:', err);
-    throw err;
+    console.warn('[FirebaseUpload] Firebase failed, falling back to local backend storage. Error:', err.message);
+    // Auto-fallback: extract filename from storage path
+    const fileName = path.split('/').pop() || 'status.jpg';
+    try {
+      const fallbackBlob = blob || base64ToBlob(base64String, 'image/jpeg');
+      return await uploadFileToBackend(fallbackBlob, fileName, token);
+    } catch (fallbackErr) {
+      console.error('[Fallback] Both Firebase and Backend uploads failed:', fallbackErr);
+      throw new Error(`Upload failed. Firebase error: ${err.message}. Backend fallback error: ${fallbackErr.message}`);
+    }
   }
 };
 
@@ -315,7 +355,8 @@ export default function Sidebar({
       // Upload to Firebase Storage and get a permanent URL
       const firebaseUrl = await uploadImageToFirebase(
         base64,
-        `avatars/${currentUser.id}_${Date.now()}.jpg`
+        `avatars/${currentUser.id}_${Date.now()}.jpg`,
+        token
       );
       setProfileAvatar(firebaseUrl);
     } catch (err) {
@@ -401,7 +442,8 @@ export default function Sidebar({
         }
         mediaUrl = await uploadImageToFirebase(
           base64,
-          `statuses/${currentUser.id}_${Date.now()}.jpg`
+          `statuses/${currentUser.id}_${Date.now()}.jpg`,
+          token
         );
       }
 

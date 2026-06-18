@@ -85,16 +85,65 @@ const base64ToBlob = (base64String, mimeType = 'image/jpeg') => {
   }
 };
 
-// Upload any file or blob to Firebase Storage and return download URL
-const uploadFileToFirebase = async (fileOrBlob, path) => {
+// Upload any file or blob to the local backend uploads directory
+const uploadFileToBackend = async (fileOrBlob, fileName, token) => {
+  console.log('[BackendUpload] Starting fallback upload to backend...');
+  try {
+    const formData = new FormData();
+    const file = fileOrBlob instanceof File 
+      ? fileOrBlob 
+      : new File([fileOrBlob], fileName || 'upload.jpg', { type: fileOrBlob.type || 'application/octet-stream' });
+    
+    formData.append('file', file);
+    
+    const res = await fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}`);
+    }
+    const data = await res.json();
+    console.log('[BackendUpload] Backend upload successful. URL:', data.url);
+    return data.url;
+  } catch (err) {
+    console.error('[BackendUpload] Fallback upload failed:', err);
+    throw err;
+  }
+};
+
+// Upload any file or blob to Firebase Storage and return download URL (with automatic backend fallback)
+const uploadFileToFirebase = async (fileOrBlob, path, token) => {
+  console.log('[FirebaseUpload] Starting upload to path:', path);
   try {
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, fileOrBlob);
+    console.log('[FirebaseUpload] Uploading bytes to Firebase Storage...');
+    
+    // Add a timeout wrapper for uploadBytes to prevent hanging forever
+    const uploadPromise = uploadBytes(storageRef, fileOrBlob);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Firebase upload timed out after 15 seconds. Please check your storage bucket rules.')), 15000)
+    );
+    
+    await Promise.race([uploadPromise, timeoutPromise]);
+    console.log('[FirebaseUpload] Bytes uploaded successfully. Fetching download URL...');
+
     const downloadURL = await getDownloadURL(storageRef);
+    console.log('[FirebaseUpload] Download URL retrieved:', downloadURL);
     return downloadURL;
   } catch (err) {
-    console.error('Firebase upload failed:', err);
-    throw err;
+    console.warn('[FirebaseUpload] Firebase failed, falling back to local backend storage. Error:', err.message);
+    const fileName = path.split('/').pop() || 'attachment.bin';
+    try {
+      return await uploadFileToBackend(fileOrBlob, fileName, token);
+    } catch (fallbackErr) {
+      console.error('[Fallback] Both Firebase and Backend uploads failed:', fallbackErr);
+      throw new Error(`Upload failed. Firebase error: ${err.message}. Backend fallback error: ${fallbackErr.message}`);
+    }
   }
 };
 
@@ -396,13 +445,13 @@ export default function ChatWindow({
           const base64 = await compressImage(selectedFile, 800, 800, 0.7);
           if (!base64) throw new Error('Failed to compress image');
           const blob = base64ToBlob(base64, mime);
-          attachmentUrl = await uploadFileToFirebase(blob, `attachments/${uniqueFileName}`);
+          attachmentUrl = await uploadFileToFirebase(blob, `attachments/${uniqueFileName}`, token);
         } else if (mime.startsWith('video/')) {
           attachmentType = 'video';
-          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`);
+          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`, token);
         } else {
           attachmentType = 'document';
-          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`);
+          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`, token);
         }
 
         if (!attachmentUrl) {
