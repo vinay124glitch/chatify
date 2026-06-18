@@ -180,7 +180,7 @@ io.on('connection', async (socket) => {
     const { messageId, senderId } = data;
     try {
       await db.run(
-        `UPDATE messages SET is_opened = 1 WHERE id = ? AND receiver_id = ?`,
+        `UPDATE messages SET is_opened = TRUE WHERE id = ? AND receiver_id = ?`,
         [messageId, userId]
       );
       
