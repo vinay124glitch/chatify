@@ -118,14 +118,20 @@ router.get('/calls', authenticateToken, async (req, res) => {
 // Update Profile endpoint
 router.post('/profile', authenticateToken, async (req, res) => {
   const { display_name, about, avatar_url } = req.body;
+  console.log('--- Profile Update Request Received ---');
+  console.log('User ID:', req.user.id);
+  console.log('Parameters:', { display_name, about, avatar_url });
+
   if (!display_name) {
+    console.log('Validation failed: display name is missing');
     return res.status(400).json({ error: 'Display name is required' });
   }
   try {
-    await db.run(
+    const result = await db.run(
       'UPDATE users SET display_name = ?, about = ?, avatar_url = ? WHERE id = ?',
       [display_name.trim(), about ? about.trim() : '', avatar_url || null, req.user.id]
     );
+    console.log('Update query finished successfully. Row count:', result.changes);
     res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
     console.error('Update profile error:', err);
