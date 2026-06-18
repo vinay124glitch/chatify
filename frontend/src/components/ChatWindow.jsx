@@ -68,6 +68,36 @@ const getAvatarUrl = (avatarUrl, displayName) => {
   return `${DEFAULT_AVATAR}${encodeURIComponent(displayName || 'U')}`;
 };
 
+// Helper to convert base64 to Blob synchronously
+const base64ToBlob = (base64String, mimeType = 'image/jpeg') => {
+  try {
+    const parts = base64String.split(',');
+    const byteString = atob(parts[1] || parts[0]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeType });
+  } catch (e) {
+    console.error('base64ToBlob failed:', e);
+    throw new Error('Failed to process image data: ' + e.message);
+  }
+};
+
+// Upload any file or blob to Firebase Storage and return download URL
+const uploadFileToFirebase = async (fileOrBlob, path) => {
+  try {
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, fileOrBlob);
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+  } catch (err) {
+    console.error('Firebase upload failed:', err);
+    throw err;
+  }
+};
+
 export default function ChatWindow({
   activeChat,
   token,
@@ -354,24 +384,29 @@ export default function ChatWindow({
     let attachmentType = null;
     let attachmentName = null;
 
-    // 1. If file selected, process to base64
+    // 1. If file selected, process and upload to Firebase Storage
     if (selectedFile) {
       setUploading(true);
       try {
         const mime = selectedFile.type;
+        const uniqueFileName = `${currentUser.id}_${Date.now()}_${selectedFile.name}`;
+        
         if (mime.startsWith('image/')) {
           attachmentType = 'image';
-          attachmentUrl = await compressImage(selectedFile, 800, 800, 0.7);
+          const base64 = await compressImage(selectedFile, 800, 800, 0.7);
+          if (!base64) throw new Error('Failed to compress image');
+          const blob = base64ToBlob(base64, mime);
+          attachmentUrl = await uploadFileToFirebase(blob, `attachments/${uniqueFileName}`);
         } else if (mime.startsWith('video/')) {
           attachmentType = 'video';
-          attachmentUrl = await readFileAsBase64(selectedFile);
+          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`);
         } else {
           attachmentType = 'document';
-          attachmentUrl = await readFileAsBase64(selectedFile);
+          attachmentUrl = await uploadFileToFirebase(selectedFile, `attachments/${uniqueFileName}`);
         }
 
         if (!attachmentUrl) {
-          throw new Error('Failed to process attachment file');
+          throw new Error('Failed to upload attachment file');
         }
         attachmentName = selectedFile.name;
       } catch (err) {

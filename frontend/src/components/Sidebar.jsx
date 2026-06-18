@@ -67,17 +67,48 @@ const getAvatarUrl = (avatarUrl, displayName) => {
   return `${DEFAULT_AVATAR}${encodeURIComponent(displayName || 'U')}`;
 };
 
+// Helper to convert base64 to Blob synchronously without using fetch
+const base64ToBlob = (base64String, mimeType = 'image/jpeg') => {
+  try {
+    const parts = base64String.split(',');
+    const byteString = atob(parts[1] || parts[0]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeType });
+  } catch (e) {
+    console.error('base64ToBlob conversion failed:', e);
+    throw new Error('Failed to process image data: ' + e.message);
+  }
+};
+
 // Upload a base64/blob image to Firebase Storage and return the download URL
 const uploadImageToFirebase = async (base64String, path) => {
+  console.log('[FirebaseUpload] Starting upload to path:', path);
   try {
-    const response = await fetch(base64String);
-    const blob = await response.blob();
+    console.log('[FirebaseUpload] Converting base64 to blob...');
+    const blob = base64ToBlob(base64String, 'image/jpeg');
+    console.log('[FirebaseUpload] Blob created successfully, size:', blob.size);
+
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, blob);
+    console.log('[FirebaseUpload] Uploading bytes to Firebase Storage...');
+    
+    // Add a timeout wrapper for uploadBytes to prevent hanging forever
+    const uploadPromise = uploadBytes(storageRef, blob);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Firebase upload timed out after 15 seconds. Please check your storage bucket rules.')), 15000)
+    );
+    
+    await Promise.race([uploadPromise, timeoutPromise]);
+    console.log('[FirebaseUpload] Bytes uploaded successfully. Fetching download URL...');
+
     const downloadURL = await getDownloadURL(storageRef);
+    console.log('[FirebaseUpload] Download URL retrieved:', downloadURL);
     return downloadURL;
   } catch (err) {
-    console.error('Firebase upload failed:', err);
+    console.error('[FirebaseUpload] Error during upload process:', err);
     throw err;
   }
 };
