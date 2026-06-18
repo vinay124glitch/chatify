@@ -5,7 +5,7 @@ import ChatWindow from './components/ChatWindow';
 import LoginRegister from './components/LoginRegister';
 import CallOverlay from './components/CallOverlay';
 import useWebRTC from './hooks/useWebRTC';
-import { Shield, MessageSquare, PhoneCall } from 'lucide-react';
+import { Zap, MessageSquare, PhoneCall } from 'lucide-react';
 import { API_BASE_URL } from './config';
 
 export default function App() {
@@ -15,6 +15,18 @@ export default function App() {
   const [contacts, setContacts] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [theme, setTheme] = useState(() => localStorage.getItem('chatify_theme') || 'dark');
+
+  // Apply theme to html element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('chatify_theme', theme);
+    // Update mobile browser chrome color
+    const meta = document.getElementById('theme-color-meta');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0F172A' : '#F1F5F9');
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   // Fetch current user details on start
   const fetchCurrentUser = useCallback(async (authToken) => {
@@ -200,7 +212,7 @@ export default function App() {
     return (
       <div style={styles.loadingContainer}>
         <div style={styles.loader} />
-        <p style={{ marginTop: '16px', color: '#94a3b8' }}>Restoring secure session...</p>
+        <p style={{ marginTop: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>Restoring session...</p>
       </div>
     );
   }
@@ -208,10 +220,10 @@ export default function App() {
   return (
     <div style={styles.appContainer}>
       {!currentUser ? (
-        <LoginRegister onLogin={handleLogin} />
+        <LoginRegister onLogin={handleLogin} theme={theme} />
       ) : (
         <div style={styles.dashboard}>
-          {/* Sidebar controls */}
+          {/* Sidebar */}
           <div className={`sidebar-container ${activeChat ? 'hidden-mobile' : ''}`}>
             <Sidebar
               currentUser={currentUser}
@@ -225,36 +237,44 @@ export default function App() {
               onInitiateCall={webrtc.initiateCall}
               fetchContacts={fetchContacts}
               onProfileUpdate={handleProfileUpdate}
+              theme={theme}
+              toggleTheme={toggleTheme}
             />
           </div>
 
-          {/* Chat Panel / Main body */}
+          {/* Chat Panel */}
           <div className={`chat-container ${!activeChat ? 'hidden-mobile' : ''}`}>
-          {activeChat ? (
-            <ChatWindow
-              activeChat={activeChat}
-              token={token}
-              socket={socket}
-              onlineUsers={onlineUsers}
-              onInitiateCall={webrtc.initiateCall}
-              onBack={() => setActiveChat(null)}
-            />
-          ) : (
-            <div style={styles.welcomePanel}>
-              <div style={styles.welcomeIconRing}>
-                <Shield size={44} style={{ color: '#10b981' }} />
+            {activeChat ? (
+              <ChatWindow
+                activeChat={activeChat}
+                token={token}
+                socket={socket}
+                onlineUsers={onlineUsers}
+                onInitiateCall={webrtc.initiateCall}
+                onBack={() => setActiveChat(null)}
+                theme={theme}
+                toggleTheme={toggleTheme}
+              />
+            ) : (
+              <div style={styles.welcomePanel}>
+                {/* Animated gradient orb */}
+                <div style={styles.welcomeOrb} />
+                <div style={styles.welcomeContent}>
+                  <div style={styles.welcomeIconRing}>
+                    <Zap size={36} style={{ color: '#ffffff' }} />
+                  </div>
+                  <h2 style={styles.welcomeTitle}>Welcome to Chatify</h2>
+                  <p style={styles.welcomeText}>Search for friends to start chatting, or tap a contact to continue a conversation.</p>
+                  <div style={styles.badgeRow}>
+                    <span style={styles.badge}><MessageSquare size={12} style={{ marginRight: '6px' }} /> Real-time Messages</span>
+                    <span style={styles.badge}><PhoneCall size={12} style={{ marginRight: '6px' }} /> HD Voice & Video</span>
+                  </div>
+                </div>
               </div>
-              <h2 style={styles.welcomeTitle}>Chatify Dashboard</h2>
-              <p style={styles.welcomeText}>Select an active contact or search above to initiate a secure encrypted message or peer-to-peer call.</p>
-              <div style={styles.badgeRow}>
-                <span style={styles.badge}><MessageSquare size={12} style={{ marginRight: '4px' }} /> WebSocket Messages</span>
-                <span style={styles.badge}><PhoneCall size={12} style={{ marginRight: '4px' }} /> WebRTC P2P Call</span>
-              </div>
-            </div>
             )}
           </div>
 
-          {/* Global calling UI overlay */}
+          {/* Global call overlay */}
           <CallOverlay
             callState={webrtc.callState}
             callType={webrtc.callType}
@@ -278,27 +298,27 @@ export default function App() {
 
 const styles = {
   appContainer: {
-    height: '100vh',
+    height: '100dvh',
     width: '100vw',
     display: 'flex',
     overflow: 'hidden',
     backgroundColor: 'var(--bg-main)'
   },
   loadingContainer: {
-    height: '100vh',
+    height: '100dvh',
     width: '100vw',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0b0f19',
-    color: '#ffffff'
+    background: 'var(--bg-main)',
+    color: 'var(--text-primary)'
   },
   loader: {
     width: '40px',
     height: '40px',
-    border: '3px solid rgba(16, 185, 129, 0.2)',
-    borderTop: '3px solid #10b981',
+    border: '3px solid var(--border-subtle)',
+    borderTop: '3px solid var(--primary)',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite'
   },
@@ -314,48 +334,69 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px',
+    padding: '40px 24px',
     textAlign: 'center',
     backgroundColor: 'var(--bg-chat)',
-    background: 'radial-gradient(circle at 50% 50%, #0e131f 0%, #07090e 100%)'
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  welcomeOrb: {
+    position: 'absolute',
+    width: '400px',
+    height: '400px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(79,70,229,0.12) 0%, transparent 70%)',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    pointerEvents: 'none'
+  },
+  welcomeContent: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center'
   },
   welcomeIconRing: {
     width: '80px',
     height: '80px',
     borderRadius: '50%',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    border: '1px solid rgba(16, 185, 129, 0.25)',
+    background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: '24px',
-    boxShadow: '0 0 20px rgba(16, 185, 129, 0.1)'
+    boxShadow: '0 8px 32px var(--primary-glow)'
   },
   welcomeTitle: {
-    fontSize: '24px',
+    fontSize: '26px',
     fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: '8px'
+    color: 'var(--text-primary)',
+    marginBottom: '10px'
   },
   welcomeText: {
-    fontSize: '14px',
-    color: '#94a3b8',
-    maxWidth: '460px',
-    lineHeight: '1.6',
-    marginBottom: '28px'
+    fontSize: '15px',
+    color: 'var(--text-secondary)',
+    maxWidth: '380px',
+    lineHeight: '1.7',
+    marginBottom: '32px'
   },
   badgeRow: {
     display: 'flex',
-    gap: '16px'
+    gap: '12px',
+    flexWrap: 'wrap',
+    justifyContent: 'center'
   },
   badge: {
     display: 'inline-flex',
     alignItems: 'center',
-    fontSize: '12px',
-    color: '#cbd5e1',
-    background: 'rgba(255, 255, 255, 0.05)',
-    border: '1px solid var(--border-glass)',
-    padding: '6px 14px',
-    borderRadius: '20px'
+    fontSize: '13px',
+    color: 'var(--text-secondary)',
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border-subtle)',
+    padding: '8px 16px',
+    borderRadius: 'var(--radius-full)',
+    fontWeight: '500'
   }
 };

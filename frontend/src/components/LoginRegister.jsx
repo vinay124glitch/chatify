@@ -225,20 +225,25 @@ export default function LoginRegister({ onLogin }) {
 
 const styles = {
   container: {
-    height: '100vh',
+    height: '100dvh',
     width: '100vw',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'radial-gradient(circle at 10% 20%, #111827 0%, #030712 100%)',
-    overflow: 'hidden'
+    background: 'var(--chat-bg-gradient)',
+    overflow: 'hidden',
+    padding: '20px'
   },
   authCard: {
-    width: '420px',
-    padding: '40px',
+    width: '100%',
+    maxWidth: '420px',
+    padding: '40px 32px',
     borderRadius: '16px',
-    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-    textAlign: 'center'
+    boxShadow: 'var(--shadow-lg), 0 10px 30px var(--primary-glow)',
+    textAlign: 'center',
+    background: 'var(--bg-panel)',
+    backdropFilter: 'blur(12px)',
+    border: '1px solid var(--border-glass)'
   },
   brand: {
     marginBottom: '28px'
@@ -247,8 +252,8 @@ const styles = {
     width: '56px',
     height: '56px',
     borderRadius: '50%',
-    background: 'rgba(16, 185, 129, 0.15)',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
+    background: 'var(--primary-glow)',
+    border: '1px solid var(--border-glass)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -257,19 +262,19 @@ const styles = {
   logoIcon: {
     width: '30px',
     height: '30px',
-    color: '#10b981',
-    filter: 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.5))'
+    color: 'var(--primary)',
+    filter: 'drop-shadow(0 0 6px var(--primary-glow))'
   },
   title: {
     fontSize: '28px',
     fontWeight: '700',
-    color: '#ffffff',
+    color: 'var(--text-primary)',
     letterSpacing: '-0.5px',
     marginBottom: '4px'
   },
   subtitle: {
     fontSize: '13px',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   errorAlert: {
     background: 'rgba(239, 68, 68, 0.15)',
@@ -295,20 +300,23 @@ const styles = {
   label: {
     fontSize: '13px',
     fontWeight: '500',
-    color: '#cbd5e1'
+    color: 'var(--text-primary)',
+    opacity: 0.9
   },
   submitBtn: {
     marginTop: '10px',
     padding: '12px',
     fontSize: '15px',
     fontWeight: '600',
-    background: 'rgba(16, 185, 129, 0.9)',
-    border: '1px solid rgba(16, 185, 129, 0.5)',
+    background: 'var(--primary)',
+    border: '1px solid var(--primary-light)',
     color: '#ffffff',
     borderRadius: '8px',
     cursor: 'pointer',
     width: '100%',
-    textAlign: 'center'
+    textAlign: 'center',
+    boxShadow: '0 4px 14px var(--primary-glow)',
+    transition: 'all 0.2s ease'
   },
   toggleFooter: {
     marginTop: '24px',
@@ -319,15 +327,16 @@ const styles = {
     fontSize: '14px'
   },
   footerText: {
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   toggleBtn: {
     background: 'none',
     border: 'none',
-    color: '#10b981',
+    color: 'var(--primary)',
     fontWeight: '600',
     cursor: 'pointer',
     padding: '0',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    transition: 'color 0.2s ease'
   }
 };

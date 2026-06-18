@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Video, Send, Check, CheckCheck, Smile, Paperclip, X, FileText, Plus, Image as ImageIcon, ChevronLeft } from 'lucide-react';
+import { Phone, Video, Send, Check, CheckCheck, Smile, Paperclip, X, FileText, Plus, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -11,7 +11,9 @@ export default function ChatWindow({
   socket,
   onlineUsers,
   onInitiateCall,
-  onBack
+  onBack,
+  theme,
+  toggleTheme
 }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -385,6 +387,14 @@ export default function ChatWindow({
 
         <div style={styles.headerActions}>
           <button
+            onClick={toggleTheme}
+            style={styles.actionBtn}
+            className="glass-btn"
+            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
             onClick={() => onInitiateCall(activeChat.id, activeChat.display_name, 'audio')}
             style={styles.actionBtn}
             className="glass-btn"
@@ -738,14 +748,15 @@ const styles = {
     position: 'relative'
   },
   chatHeader: {
-    height: '76px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 24px',
-    borderBottom: '1px solid var(--border-glass)',
-    backgroundColor: 'rgba(19, 26, 38, 0.6)',
-    zIndex: 10
+    padding: '0 20px',
+    minHeight: '60px',
+    borderBottom: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-sidebar)',
+    zIndex: 10,
+    flexShrink: 0
   },
   userInfo: {
     display: 'flex',
@@ -756,49 +767,51 @@ const styles = {
     display: 'inline-block'
   },
   avatar: {
-    width: '40px',
-    height: '40px',
+    width: '42px',
+    height: '42px',
     borderRadius: '50%',
     objectFit: 'cover',
-    background: '#1e293b'
+    background: 'var(--bg-elevated)',
+    border: '2px solid var(--border-subtle)'
   },
   presenceBadge: {
     position: 'absolute',
     bottom: '0px',
     right: '0px',
-    border: '2px solid #131a26',
+    border: '2px solid var(--bg-sidebar)',
     width: '10px',
     height: '10px'
   },
   displayName: {
     fontSize: '15px',
     fontWeight: '600',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   statusText: {
     fontSize: '12px',
     fontWeight: '400',
     display: 'block',
-    marginTop: '1px'
+    marginTop: '1px',
+    color: 'var(--text-secondary)'
   },
   headerActions: {
     display: 'flex',
-    gap: '12px'
+    gap: '8px'
   },
   actionBtn: {
-    width: '38px',
-    height: '38px',
+    width: '40px',
+    height: '40px',
     borderRadius: '50%',
-    color: '#34d399'
+    color: 'var(--primary-light)'
   },
   messageFeed: {
     flex: 1,
     overflowY: 'auto',
-    padding: '24px',
+    padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-    background: 'radial-gradient(circle at 50% 50%, #0e131f 0%, #07090e 100%)'
+    gap: '8px',
+    backgroundColor: 'var(--bg-chat)'
   },
   emptyState: {
     flex: 1,
@@ -806,31 +819,31 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   welcomeCircle: {
     width: '64px',
     height: '64px',
     borderRadius: '50%',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    border: '1px solid rgba(16, 185, 129, 0.2)',
+    background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: '16px'
+    marginBottom: '16px',
+    boxShadow: '0 4px 20px var(--primary-glow)'
   },
   msgRow: {
     display: 'flex',
     width: '100%'
   },
   msgBubble: {
-    maxWidth: '65%',
+    maxWidth: '78%',
     padding: '10px 14px 6px 14px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+    borderRadius: 'var(--radius-lg)',
+    boxShadow: 'var(--shadow-sm)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px'
+    gap: '5px'
   },
   attachmentContainer: {
     width: '100%',
@@ -857,22 +870,22 @@ const styles = {
   bubbleDoc: {
     display: 'flex',
     alignItems: 'center',
-    background: 'rgba(0, 0, 0, 0.2)',
-    border: '1px solid var(--border-glass)',
-    borderRadius: '8px',
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-sm)',
     padding: '10px 14px',
-    color: '#34d399',
+    color: 'var(--primary-light)',
     textDecoration: 'none',
-    transition: 'background 0.2s'
+    transition: 'background var(--transition)'
   },
   docName: {
     fontSize: '13.5px',
     fontWeight: '500',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   docSize: {
     fontSize: '11px',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   viewOnceToggleBtn: {
     width: '28px',
@@ -925,9 +938,9 @@ const styles = {
   },
   msgText: {
     fontSize: '14.5px',
-    color: '#f8fafc',
+    color: 'var(--text-primary)',
     wordBreak: 'break-word',
-    lineHeight: '1.4'
+    lineHeight: '1.5'
   },
   msgMeta: {
     display: 'flex',
@@ -938,17 +951,19 @@ const styles = {
   },
   msgTime: {
     fontSize: '10px',
-    color: '#94a3b8'
+    color: 'var(--text-muted)',
+    opacity: 0.8
   },
   msgStatus: {
     display: 'flex',
     alignItems: 'center'
   },
   bottomBarContainer: {
-    borderTop: '1px solid var(--border-glass)',
-    backgroundColor: 'rgba(19, 26, 38, 0.8)',
+    borderTop: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-sidebar)',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    paddingBottom: 'max(0px, env(safe-area-inset-bottom, 0px))'
   },
   previewTray: {
     display: 'flex',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, LogOut, MessageSquare, Phone, UserPlus, PhoneCall, Video, Camera, Plus, X, Globe, Eye, Image } from 'lucide-react';
+import { Search, LogOut, MessageSquare, Phone, UserPlus, PhoneCall, Video, Camera, Plus, X, Globe, Eye, Image, Sun, Moon } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { API_BASE_URL } from '../config';
@@ -15,7 +15,9 @@ export default function Sidebar({
   onLogout,
   onInitiateCall,
   fetchContacts,
-  onProfileUpdate
+  onProfileUpdate,
+  theme,
+  toggleTheme
 }) {
   const [activeTab, setActiveTab] = useState('chats'); // 'chats', 'calls', or 'status'
   
@@ -158,6 +160,11 @@ export default function Sidebar({
 
   // Select a user from search results
   const handleSelectSearchResult = async (user) => {
+    // Always open the chat immediately and clear search query
+    setActiveChat(user);
+    setSearchQuery('');
+    setSearchResults([]);
+
     try {
       const res = await fetch(`${API_BASE_URL}/users/contacts/add`, {
         method: 'POST',
@@ -170,9 +177,6 @@ export default function Sidebar({
       
       if (res.ok) {
         await fetchContacts();
-        setActiveChat(user);
-        setSearchQuery('');
-        setSearchResults([]);
       }
     } catch (err) {
       console.error(err);
@@ -616,7 +620,7 @@ export default function Sidebar({
                   accept="image/*"
                   disabled={profileLoading}
                 />
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>Click photo to upload new picture</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>Click photo to upload new picture</span>
               </div>
 
               <div style={styles.formGroup}>
@@ -644,7 +648,16 @@ export default function Sidebar({
                 />
               </div>
 
-              <button type="submit" className="glass-btn" style={styles.saveProfileBtn} disabled={profileLoading}>
+              {/* Theme Toggle */}
+              <button type="button" className="theme-toggle-btn" onClick={toggleTheme}>
+                {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+                <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                <div className={`toggle-track ${theme === 'light' ? 'active' : ''}`}>
+                  <div className="toggle-knob" />
+                </div>
+              </button>
+
+              <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '4px' }} disabled={profileLoading}>
                 {profileLoading ? 'Saving...' : 'Save Profile'}
               </button>
             </form>
@@ -675,9 +688,9 @@ export default function Sidebar({
               <button
                 style={{
                   ...styles.creatorToggleBtn,
-                  backgroundColor: statusType === 'text' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                  color: statusType === 'text' ? '#10b981' : '#94a3b8',
-                  border: statusType === 'text' ? '1px solid #10b981' : '1px solid transparent'
+                  backgroundColor: statusType === 'text' ? 'var(--primary-glow)' : 'transparent',
+                  color: statusType === 'text' ? 'var(--primary)' : 'var(--text-secondary)',
+                  border: statusType === 'text' ? '1px solid var(--primary)' : '1px solid transparent'
                 }}
                 onClick={() => {
                   setStatusType('text');
@@ -691,9 +704,9 @@ export default function Sidebar({
               <button
                 style={{
                   ...styles.creatorToggleBtn,
-                  backgroundColor: statusType === 'image' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                  color: statusType === 'image' ? '#10b981' : '#94a3b8',
-                  border: statusType === 'image' ? '1px solid #10b981' : '1px solid transparent'
+                  backgroundColor: statusType === 'image' ? 'var(--primary-glow)' : 'transparent',
+                  color: statusType === 'image' ? 'var(--primary)' : 'var(--text-secondary)',
+                  border: statusType === 'image' ? '1px solid var(--primary)' : '1px solid transparent'
                 }}
                 onClick={() => {
                   statusFileInputRef.current?.click();
@@ -845,38 +858,42 @@ export default function Sidebar({
 
 const styles = {
   sidebar: {
-    width: '350px',
+    width: '100%',
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    borderRight: '1px solid var(--border-glass)',
     backgroundColor: 'var(--bg-sidebar)',
-    position: 'relative'
+    position: 'relative',
+    overflow: 'hidden'
   },
   profileHeader: {
     display: 'flex',
     alignItems: 'center',
-    padding: '20px',
-    borderBottom: '1px solid var(--border-glass)',
-    gap: '12px'
+    padding: '16px 20px',
+    borderBottom: '1px solid var(--border-subtle)',
+    gap: '12px',
+    minHeight: '72px'
   },
   avatarWrapper: {
     position: 'relative',
-    display: 'inline-block'
+    display: 'inline-block',
+    flexShrink: 0
   },
   avatar: {
-    width: '44px',
-    height: '44px',
+    width: '46px',
+    height: '46px',
     borderRadius: '50%',
     objectFit: 'cover',
-    background: '#1e293b'
+    background: 'var(--bg-elevated)',
+    border: '2px solid var(--border-subtle)'
   },
   smallAvatar: {
-    width: '36px',
-    height: '36px',
+    width: '38px',
+    height: '38px',
     borderRadius: '50%',
     objectFit: 'cover',
-    background: '#1e293b'
+    background: 'var(--bg-elevated)',
+    flexShrink: 0
   },
   editAvatarIconOverlay: {
     position: 'absolute',
@@ -885,7 +902,7 @@ const styles = {
     width: '18px',
     height: '18px',
     borderRadius: '50%',
-    backgroundColor: '#10b981',
+    background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -893,8 +910,8 @@ const styles = {
   },
   presenceIndicator: {
     position: 'absolute',
-    bottom: '0px',
-    right: '0px',
+    bottom: '1px',
+    right: '1px',
     border: '2px solid var(--bg-sidebar)',
     width: '12px',
     height: '12px'
@@ -903,26 +920,34 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    gap: '2px'
   },
   displayName: {
     fontSize: '15px',
     fontWeight: '600',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   username: {
     fontSize: '12px',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   logoutBtn: {
-    padding: '8px',
+    padding: '10px',
     background: 'transparent',
     border: 'none',
-    color: '#f87171',
-    cursor: 'pointer'
+    color: 'var(--error)',
+    cursor: 'pointer',
+    borderRadius: 'var(--radius-full)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background var(--transition)',
+    minWidth: '40px',
+    minHeight: '40px'
   },
   searchContainer: {
-    padding: '12px 16px'
+    padding: '10px 16px 8px'
   },
   searchBar: {
     position: 'relative',
@@ -931,67 +956,71 @@ const styles = {
   },
   searchIcon: {
     position: 'absolute',
-    left: '12px',
-    color: '#94a3b8'
+    left: '14px',
+    color: 'var(--text-muted)',
+    pointerEvents: 'none'
   },
   searchInput: {
     width: '100%',
-    background: 'rgba(15, 23, 42, 0.4)',
-    border: '1px solid var(--border-glass)',
-    borderRadius: '20px',
-    padding: '8px 12px 8px 36px',
+    background: 'var(--bg-input)',
+    border: '1.5px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-full)',
+    padding: '10px 16px 10px 40px',
     outline: 'none',
-    color: '#ffffff',
+    color: 'var(--text-primary)',
     fontSize: '14px',
     fontFamily: 'inherit',
-    transition: 'border-color 0.2s'
+    transition: 'border-color 0.2s, box-shadow 0.2s'
   },
   searchResultsPanel: {
     position: 'absolute',
-    top: '120px',
-    left: '16px',
-    right: '16px',
-    borderRadius: '12px',
-    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+    top: '124px',
+    left: '12px',
+    right: '12px',
+    borderRadius: 'var(--radius-md)',
+    boxShadow: 'var(--shadow-lg)',
     zIndex: 100,
-    maxHeight: '250px',
+    maxHeight: '280px',
     overflowY: 'auto',
-    backgroundColor: '#111827'
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-subtle)'
   },
   searchPanelHeader: {
     fontSize: '11px',
     fontWeight: '600',
     textTransform: 'uppercase',
-    color: '#64748b',
+    letterSpacing: '0.05em',
+    color: 'var(--text-muted)',
     padding: '10px 14px',
-    borderBottom: '1px solid var(--border-glass)'
+    borderBottom: '1px solid var(--border-subtle)'
   },
   searchResultRow: {
     display: 'flex',
     alignItems: 'center',
     padding: '10px 14px',
     gap: '12px',
-    transition: 'background 0.2s',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.03)'
+    transition: 'background var(--transition)',
+    borderBottom: '1px solid var(--border-subtle)'
   },
   searchResultName: {
     fontSize: '14px',
     fontWeight: '500',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   searchResultUsername: {
     fontSize: '12px',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   noResults: {
-    padding: '16px',
+    padding: '20px',
     textAlign: 'center',
-    color: '#94a3b8',
+    color: 'var(--text-muted)',
     fontSize: '14px'
   },
   tabsContainer: {
     display: 'flex',
-    borderBottom: '1px solid var(--border-glass)'
+    borderBottom: '1px solid var(--border-subtle)',
+    padding: '0 8px'
   },
   tabBtn: {
     flex: 1,
@@ -1019,7 +1048,7 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#94a3b8',
+    color: 'var(--text-muted)',
     padding: '30px',
     textAlign: 'center'
   },
@@ -1028,8 +1057,9 @@ const styles = {
     alignItems: 'center',
     padding: '14px 20px',
     gap: '14px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.02)',
-    transition: 'background 0.2s'
+    borderBottom: '1px solid var(--border-subtle)',
+    transition: 'background var(--transition)',
+    cursor: 'pointer'
   },
   contactDetails: {
     flex: 1,
@@ -1046,39 +1076,40 @@ const styles = {
   contactName: {
     fontSize: '15px',
     fontWeight: '600',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   contactUsername: {
     fontSize: '12.5px',
-    color: '#94a3b8'
+    color: 'var(--text-secondary)'
   },
   unreadBadge: {
     fontSize: '11px',
     color: '#ffffff',
     fontWeight: '700',
-    background: '#ef4444',
-    width: '18px',
-    height: '18px',
-    borderRadius: '50%',
+    background: 'var(--primary)',
+    minWidth: '20px',
+    height: '20px',
+    borderRadius: 'var(--radius-full)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 0 6px rgba(239, 68, 68, 0.4)'
+    padding: '0 5px',
+    boxShadow: '0 2px 6px var(--primary-glow)'
   },
   callLogItem: {
     display: 'flex',
     alignItems: 'center',
     padding: '12px 20px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.02)'
+    borderBottom: '1px solid var(--border-subtle)'
   },
   callLogName: {
     fontSize: '14px',
     fontWeight: '500',
-    color: '#ffffff'
+    color: 'var(--text-primary)'
   },
   callLogTime: {
     fontSize: '12px',
-    color: '#94a3b8',
+    color: 'var(--text-secondary)',
     marginTop: '2px'
   },
   callLogAction: {
@@ -1087,10 +1118,10 @@ const styles = {
   },
   callIconBtn: {
     padding: '6px',
-    color: '#10b981',
+    color: 'var(--primary)',
     borderRadius: '50%',
-    width: '30px',
-    height: '30px'
+    width: '32px',
+    height: '32px'
   },
   
   /* Status styles */
