@@ -13,7 +13,8 @@ export default function ChatWindow({
   onInitiateCall,
   onBack,
   theme,
-  toggleTheme
+  toggleTheme,
+  currentUser
 }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -31,6 +32,11 @@ export default function ChatWindow({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [customStickers, setCustomStickers] = useState([]);
   const customStickerInputRef = useRef(null);
+
+  // Reaction states
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState(null);
+  const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
   const fetchCustomStickers = async () => {
     try {
@@ -157,11 +163,21 @@ export default function ChatWindow({
       );
     };
 
+    // Reaction update from server
+    const handleReactionUpdate = (data) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === data.messageId ? { ...msg, reactions: data.reactions } : msg
+        )
+      );
+    };
+
     socket.on('receive_message', handleReceiveMessage);
     socket.on('message_ack', handleMessageAck);
     socket.on('message_status_update', handleStatusUpdate);
     socket.on('typing_status', handleTypingStatus);
     socket.on('view_once_opened', handleViewOnceOpened);
+    socket.on('reaction_update', handleReactionUpdate);
 
     return () => {
       socket.off('receive_message', handleReceiveMessage);
@@ -169,8 +185,26 @@ export default function ChatWindow({
       socket.off('message_status_update', handleStatusUpdate);
       socket.off('typing_status', handleTypingStatus);
       socket.off('view_once_opened', handleViewOnceOpened);
+      socket.off('reaction_update', handleReactionUpdate);
     };
   }, [socket, activeChat]);
+
+  // Close reaction picker on clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (activeReactionMsgId && !e.target.closest('.reaction-picker-anim') && !e.target.closest('.reaction-trigger-btn')) {
+        setActiveReactionMsgId(null);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [activeReactionMsgId]);
+
+  const handleReactMessage = (messageId, emoji) => {
+    if (!socket) return;
+    socket.emit('react_message', { messageId, emoji });
+    setActiveReactionMsgId(null);
+  };
 
   // Handle key typing triggers
   const handleTyping = () => {
@@ -220,10 +254,30 @@ export default function ChatWindow({
 
     try {
       setUploading(true);
-      const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const storageRef = ref(storage, `stickers/${uniqueName}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      let url = null;
+      
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!uploadRes.ok) {
+          throw new Error('Local server upload failed');
+        }
+        
+        const uploadData = await uploadRes.json();
+        url = uploadData.url;
+      } else {
+        const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `stickers/${uniqueName}`);
+        await uploadBytes(storageRef, file);
+        url = await getDownloadURL(storageRef);
+      }
 
       const saveRes = await fetch(`${API_BASE_URL}/users/stickers`, {
         method: 'POST',
@@ -238,7 +292,7 @@ export default function ChatWindow({
       }
     } catch (err) {
       console.error('Failed to upload custom sticker:', err);
-      alert('Failed to upload custom sticker');
+      alert('Failed to upload custom sticker: ' + err.message);
     } finally {
       setUploading(false);
       if (customStickerInputRef.current) {
@@ -260,12 +314,28 @@ export default function ChatWindow({
     if (selectedFile) {
       setUploading(true);
       try {
-        const uniqueName = `${Date.now()}-${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `attachments/${uniqueName}`);
-        await uploadBytes(storageRef, selectedFile);
-        const downloadUrl = await getDownloadURL(storageRef);
-
-        attachmentUrl = downloadUrl;
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocal) {
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          
+          const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!uploadRes.ok) {
+            throw new Error('Local server upload failed');
+          }
+          
+          const uploadData = await uploadRes.json();
+          attachmentUrl = uploadData.url;
+        } else {
+          const uniqueName = `${Date.now()}-${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+          const storageRef = ref(storage, `attachments/${uniqueName}`);
+          await uploadBytes(storageRef, selectedFile);
+          attachmentUrl = await getDownloadURL(storageRef);
+        }
         
         const mime = selectedFile.type;
         if (mime.startsWith('image/')) {
@@ -432,14 +502,40 @@ export default function ChatWindow({
             return (
               <div
                 key={msg.id || index}
+                onMouseEnter={() => setHoveredMsgId(msg.id)}
+                onMouseLeave={() => setHoveredMsgId(null)}
                 style={{
                   ...styles.msgRow,
-                  justifyContent: isMe ? 'flex-end' : 'flex-start'
+                  justifyContent: isMe ? 'flex-end' : 'flex-start',
+                  position: 'relative',
+                  alignItems: 'center',
+                  marginBottom: (msg.reactions && msg.reactions.length > 0) ? '12px' : '2px'
                 }}
               >
+                {/* Reaction button for my messages (left side of bubble) */}
+                {isMe && (hoveredMsgId === msg.id || activeReactionMsgId === msg.id) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
+                    }}
+                    style={styles.reactionTriggerBtn}
+                    className="reaction-trigger-btn glass-btn"
+                    title="React"
+                  >
+                    <Smile size={14} />
+                  </button>
+                )}
+
                 <div
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
+                  }}
                   style={{
                     ...styles.msgBubble,
+                    position: 'relative',
                     backgroundColor: isSticker ? 'transparent' : (isMe ? 'var(--msg-sent)' : 'var(--msg-received)'),
                     borderTopRightRadius: isMe ? '2px' : '12px',
                     borderTopLeftRadius: isMe ? '12px' : '2px',
@@ -448,6 +544,33 @@ export default function ChatWindow({
                     padding: isSticker ? '0' : '10px 14px 6px 14px'
                   }}
                 >
+                  {/* Reaction Picker Pop-up */}
+                  {activeReactionMsgId === msg.id && (
+                    <div
+                      style={{
+                        ...styles.reactionPickerBar,
+                        left: isMe ? 'auto' : '0',
+                        right: isMe ? '0' : 'auto',
+                      }}
+                      className="reaction-picker-anim"
+                    >
+                      {REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReactMessage(msg.id, emoji);
+                          }}
+                          style={styles.reactionEmojiBtn}
+                          className="reaction-emoji-btn"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {msg.attachment_url && (
                     <div style={styles.attachmentContainer}>
                       {msg.attachment_type === 'sticker' && (
@@ -527,7 +650,68 @@ export default function ChatWindow({
                     <span style={styles.msgTime}>{formatTime(msg.created_at)}</span>
                     {isMe && <span style={styles.msgStatus}>{renderStatus(msg.status)}</span>}
                   </div>
+
+                  {/* Reaction Summary Badge Pill */}
+                  {(() => {
+                    if (!msg.reactions || !Array.isArray(msg.reactions) || msg.reactions.length === 0) return null;
+                    const validReactions = msg.reactions.filter(r => r && r.emoji);
+                    if (validReactions.length === 0) return null;
+
+                    const reactionCounts = {};
+                    validReactions.forEach(r => {
+                      reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+                    });
+
+                    const uniqueEmojis = Object.keys(reactionCounts);
+                    const totalCount = validReactions.length;
+
+                    // Build tooltip
+                    const tooltipText = validReactions.map(r => {
+                      const isReactMe = currentUser && Number(r.user_id) === Number(currentUser.id);
+                      const name = isReactMe ? 'You' : (activeChat.display_name || 'Other');
+                      return `${name} (${r.emoji})`;
+                    }).join(', ');
+
+                    return (
+                      <div
+                        style={{
+                          ...styles.reactionPill,
+                          right: isMe ? '12px' : 'auto',
+                          left: isMe ? 'auto' : '12px',
+                        }}
+                        title={tooltipText}
+                        className="reaction-pill"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
+                        }}
+                      >
+                        <span style={styles.reactionPillEmojis}>
+                          {uniqueEmojis.slice(0, 3).join('')}
+                        </span>
+                        {totalCount > 1 && (
+                          <span style={styles.reactionPillCount}>{totalCount}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
+
+                {/* Reaction button for other user's messages (right side of bubble) */}
+                {!isMe && (hoveredMsgId === msg.id || activeReactionMsgId === msg.id) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
+                    }}
+                    style={styles.reactionTriggerBtn}
+                    className="reaction-trigger-btn glass-btn"
+                    title="React"
+                  >
+                    <Smile size={14} />
+                  </button>
+                )}
               </div>
             );
           })
@@ -1103,5 +1287,69 @@ const styles = {
     '&:hover': {
       backgroundColor: 'rgba(16, 185, 129, 0.15)'
     }
+  },
+  reactionTriggerBtn: {
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: 'none',
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    margin: '0 6px',
+    transition: 'opacity 0.2s, background 0.2s',
+    flexShrink: 0
+  },
+  reactionPickerBar: {
+    position: 'absolute',
+    top: '-46px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: 'var(--bg-sidebar)',
+    border: '1px solid var(--border-glass)',
+    borderRadius: '24px',
+    padding: '4px 8px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+    zIndex: 40,
+    whiteSpace: 'nowrap'
+  },
+  reactionEmojiBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: '18px',
+    cursor: 'pointer',
+    padding: '2px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  reactionPill: {
+    position: 'absolute',
+    bottom: '-10px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '3px',
+    backgroundColor: 'var(--bg-elevated)',
+    border: '1px solid var(--border-glass)',
+    borderRadius: '12px',
+    padding: '2px 6px',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    zIndex: 5
+  },
+  reactionPillEmojis: {
+    fontSize: '11px',
+    letterSpacing: '-1px'
+  },
+  reactionPillCount: {
+    fontSize: '10px',
+    fontWeight: '600',
+    color: 'var(--text-secondary)',
+    paddingLeft: '2px'
   }
 };

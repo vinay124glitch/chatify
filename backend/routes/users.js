@@ -81,10 +81,14 @@ router.get('/messages/:otherUserId', authenticateToken, async (req, res) => {
   const otherUserId = req.params.otherUserId;
   try {
     const messages = await db.all(
-      `SELECT * FROM messages 
-       WHERE (sender_id = ? AND receiver_id = ?) 
-          OR (sender_id = ? AND receiver_id = ?)
-       ORDER BY created_at ASC`,
+      `SELECT m.*,
+              (SELECT json_agg(json_build_object('user_id', r.user_id, 'emoji', r.emoji))
+               FROM message_reactions r
+               WHERE r.message_id = m.id) as reactions
+       FROM messages m
+       WHERE (m.sender_id = ? AND m.receiver_id = ?) 
+          OR (m.sender_id = ? AND m.receiver_id = ?)
+       ORDER BY m.created_at ASC`,
       [req.user.id, otherUserId, otherUserId, req.user.id]
     );
     res.json(messages);
@@ -118,12 +122,8 @@ router.get('/calls', authenticateToken, async (req, res) => {
 // Update Profile endpoint
 router.post('/profile', authenticateToken, async (req, res) => {
   const { display_name, about, avatar_url } = req.body;
-  console.log('--- Profile Update Request Received ---');
-  console.log('User ID:', req.user.id);
-  console.log('Parameters:', { display_name, about, avatar_url });
 
   if (!display_name) {
-    console.log('Validation failed: display name is missing');
     return res.status(400).json({ error: 'Display name is required' });
   }
   try {
@@ -131,10 +131,13 @@ router.post('/profile', authenticateToken, async (req, res) => {
       'UPDATE users SET display_name = ?, about = ?, avatar_url = ? WHERE id = ?',
       [display_name.trim(), about ? about.trim() : '', avatar_url || null, req.user.id]
     );
-    console.log('Update query finished successfully. Row count:', result.changes);
+    console.log('[Profile] Updated user', req.user.id, '— rows affected:', result.changes);
     res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
-    console.error('Update profile error:', err);
+    console.error('Update profile error:', err.message);
+    if (err.message.includes('timeout') || err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
+      return res.status(503).json({ error: 'Database connection timed out. Please try again.' });
+    }
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });

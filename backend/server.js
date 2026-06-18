@@ -8,10 +8,41 @@ const userRoutes = require('./routes/users');
 const { verifyToken } = require('./auth');
 
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g, '_'));
+  }
+});
+
+const upload = multer({ storage });
+
+// Serve static uploads folder
+app.use('/uploads', express.static(uploadsDir));
+
+// Local file upload endpoint
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ success: true, url: fileUrl });
+});
 
 // Routes
 app.use('/auth', authRoutes);
@@ -111,7 +142,7 @@ io.on('connection', async (socket) => {
       const targetUserId = Number(receiverId);
       const isOnline = userSockets.has(targetUserId);
       const status = isOnline ? 'delivered' : 'sent';
-      const viewOnceVal = isViewOnce ? 1 : 0;
+      const viewOnceVal = isViewOnce ? true : false;
 
       const result = await db.run(
         'INSERT INTO messages (sender_id, receiver_id, content, status, attachment_url, attachment_type, attachment_name, is_view_once) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -128,7 +159,7 @@ io.on('connection', async (socket) => {
         attachment_type: attachmentType || null,
         attachment_name: attachmentName || null,
         is_view_once: viewOnceVal,
-        is_opened: 0,
+        is_opened: false,
         created_at: new Date().toISOString()
       };
 
@@ -191,6 +222,62 @@ io.on('connection', async (socket) => {
       });
     } catch (err) {
       console.error('Open view once error:', err);
+    }
+  });
+
+  // React to a message with an emoji
+  socket.on('react_message', async (data) => {
+    const { messageId, emoji } = data;
+    if (!messageId || !emoji) return;
+
+    try {
+      // Get the message to find the other participant
+      const msg = await db.get('SELECT sender_id, receiver_id FROM messages WHERE id = ?', [messageId]);
+      if (!msg) return;
+
+      // Verify the reacting user is a participant
+      const senderId = Number(msg.sender_id);
+      const receiverId = Number(msg.receiver_id);
+      if (userId !== senderId && userId !== receiverId) return;
+
+      // Check if user already has a reaction on this message
+      const existing = await db.get(
+        'SELECT id, emoji FROM message_reactions WHERE message_id = ? AND user_id = ?',
+        [messageId, userId]
+      );
+
+      if (existing && existing.emoji === emoji) {
+        // Same emoji → toggle off (delete)
+        await db.run('DELETE FROM message_reactions WHERE id = ?', [existing.id]);
+      } else if (existing) {
+        // Different emoji → update
+        await db.run('UPDATE message_reactions SET emoji = ? WHERE id = ?', [emoji, existing.id]);
+      } else {
+        // No existing reaction → insert
+        await db.run(
+          'INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)',
+          [messageId, userId, emoji]
+        );
+      }
+
+      // Fetch updated reactions for this message
+      const reactions = await db.all(
+        'SELECT user_id, emoji FROM message_reactions WHERE message_id = ?',
+        [messageId]
+      );
+
+      const reactionUpdate = {
+        messageId,
+        reactions: reactions || []
+      };
+
+      // Broadcast to both participants
+      sendToUser(senderId, 'reaction_update', reactionUpdate);
+      if (senderId !== receiverId) {
+        sendToUser(receiverId, 'reaction_update', reactionUpdate);
+      }
+    } catch (err) {
+      console.error('React message error:', err);
     }
   });
 

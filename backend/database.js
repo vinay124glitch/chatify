@@ -1,11 +1,22 @@
 const { Pool } = require('pg');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  // Prevent hanging forever on Supabase free tier connection limits
+  max: 5,                        // max 5 concurrent connections (free tier safe)
+  connectionTimeoutMillis: 8000, // fail after 8 seconds if no connection available
+  idleTimeoutMillis: 30000,      // release idle connections after 30 seconds
+  query_timeout: 10000           // cancel any query running more than 10 seconds
+});
+
+// Handle pool-level errors (avoids unhandled promise rejections on stale connections)
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle PostgreSQL client:', err.message);
 });
 
 // Helper to convert ? parameters to $1, $2, etc for pg
@@ -122,6 +133,17 @@ async function initDb() {
       url TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS message_reactions (
+      id SERIAL PRIMARY KEY,
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      emoji TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT unique_message_user_reaction UNIQUE (message_id, user_id)
     )
   `);
 }

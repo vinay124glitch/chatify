@@ -199,11 +199,29 @@ export default function Sidebar({
 
     setProfileLoading(true);
     try {
-      const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const storageRef = ref(storage, `avatars/${uniqueName}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setProfileAvatar(url);
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!uploadRes.ok) {
+          throw new Error('Local server upload failed');
+        }
+        
+        const uploadData = await uploadRes.json();
+        setProfileAvatar(uploadData.url);
+      } else {
+        const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `avatars/${uniqueName}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        setProfileAvatar(url);
+      }
     } catch (err) {
       alert(`Avatar upload failed: ${err.message}`);
     } finally {
@@ -217,6 +235,11 @@ export default function Sidebar({
     if (!profileName.trim()) return;
 
     setProfileLoading(true);
+
+    // Abort the request after 12 seconds to prevent infinite "Saving..." state
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const res = await fetch(`${API_BASE_URL}/users/profile`, {
         method: 'POST',
@@ -228,18 +251,27 @@ export default function Sidebar({
           display_name: profileName.trim(),
           about: profileAbout.trim(),
           avatar_url: profileAvatar
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         setIsProfileOpen(false);
         onProfileUpdate(); // Reload user state
       } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to update profile');
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to update profile. Please try again.');
       }
     } catch (err) {
-      console.error(err);
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        alert('Request timed out. The server took too long to respond. Please try again.');
+      } else {
+        alert('Network error. Please check your connection and try again.');
+      }
+      console.error('Profile save error:', err);
     } finally {
       setProfileLoading(false);
     }
@@ -267,10 +299,28 @@ export default function Sidebar({
     try {
       // 1. If image, upload first
       if (statusType === 'image' && statusFile) {
-        const uniqueName = `${Date.now()}-${statusFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `status/${uniqueName}`);
-        await uploadBytes(storageRef, statusFile);
-        mediaUrl = await getDownloadURL(storageRef);
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocal) {
+          const formData = new FormData();
+          formData.append('file', statusFile);
+          
+          const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!uploadRes.ok) {
+            throw new Error('Local server upload failed');
+          }
+          
+          const uploadData = await uploadRes.json();
+          mediaUrl = uploadData.url;
+        } else {
+          const uniqueName = `${Date.now()}-${statusFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+          const storageRef = ref(storage, `status/${uniqueName}`);
+          await uploadBytes(storageRef, statusFile);
+          mediaUrl = await getDownloadURL(storageRef);
+        }
       }
 
       // 2. Publish status details

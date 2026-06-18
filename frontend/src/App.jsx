@@ -254,6 +254,7 @@ export default function App() {
                 onBack={() => setActiveChat(null)}
                 theme={theme}
                 toggleTheme={toggleTheme}
+                currentUser={currentUser}
               />
             ) : (
               <div style={styles.welcomePanel}>
