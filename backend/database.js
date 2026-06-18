@@ -17,7 +17,9 @@ function convertSql(sql) {
 async function run(sql, params = []) {
   const pgSql = convertSql(sql);
   let finalSql = pgSql;
-  if (finalSql.trim().toUpperCase().startsWith('INSERT') && !finalSql.toUpperCase().includes('RETURNING')) {
+  if (finalSql.trim().toUpperCase().startsWith('INSERT') && 
+      !finalSql.toUpperCase().includes('RETURNING') &&
+      !finalSql.toUpperCase().includes('INTO CONTACTS')) {
     finalSql += ' RETURNING id';
   }
   try {
