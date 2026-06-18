@@ -177,3 +177,54 @@ body, html, #root {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Mobile Responsive Layout */
+.sidebar-container {
+  display: flex;
+  height: 100%;
+}
+.chat-container {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  flex-direction: column;
+}
+
+/* Default state for mobile back button is hidden */
+.mobile-back-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  margin-right: 12px;
+  padding: 4px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 768px) {
+  .hidden-mobile {
+    display: none !important;
+  }
+  
+  .sidebar-container, .chat-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 !important;
+  }
+
+  .mobile-back-btn {
+    display: flex;
+  }
+
+  /* Chat header adjustments for mobile */
+  .chat-header-mobile {
+    padding: 10px 15px !important;
+  }
+}

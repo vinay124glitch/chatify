@@ -36,7 +36,7 @@ export default function Sidebar({
 
   // Profile Form States
   const [profileName, setProfileName] = useState(currentUser.display_name);
-  const [profileAbout, setProfileAbout] = useState(currentUser.about || 'Hey there! I am using HeroChat.');
+  const [profileAbout, setProfileAbout] = useState(currentUser.about || 'Hey there! I am using Chatify.');
   const [profileAvatar, setProfileAvatar] = useState(currentUser.avatar_url);
   const [profileLoading, setProfileLoading] = useState(false);
 

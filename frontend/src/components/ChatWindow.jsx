@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Video, Send, Check, CheckCheck, Smile, Paperclip, X, FileText, Plus, Image as ImageIcon } from 'lucide-react';
+import { Phone, Video, Send, Check, CheckCheck, Smile, Paperclip, X, FileText, Plus, Image as ImageIcon, ChevronLeft } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -10,7 +10,8 @@ export default function ChatWindow({
   token,
   socket,
   onlineUsers,
-  onInitiateCall
+  onInitiateCall,
+  onBack
 }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -359,8 +360,11 @@ export default function ChatWindow({
   return (
     <div style={styles.chatWindow}>
       {/* Top Header */}
-      <div style={styles.chatHeader} className="glass-panel">
+      <div style={styles.chatHeader} className="glass-panel chat-header-mobile">
         <div style={styles.userInfo}>
+          <button className="mobile-back-btn" onClick={onBack} title="Back to Contacts">
+             <ChevronLeft size={24} />
+          </button>
           <div style={styles.avatarWrapper}>
             <img src={activeChat.avatar_url} alt={activeChat.display_name} style={styles.avatar} />
             <div

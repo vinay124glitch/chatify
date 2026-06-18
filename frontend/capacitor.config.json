@@ -1,5 +1,5 @@
 {
-  "appId": "com.herochat.app",
-  "appName": "HeroChat",
+  "appId": "com.chatify.app",
+  "appName": "Chatify",
   "webDir": "dist"
 }

@@ -212,21 +212,24 @@ export default function App() {
       ) : (
         <div style={styles.dashboard}>
           {/* Sidebar controls */}
-          <Sidebar
-            currentUser={currentUser}
-            token={token}
-            contacts={contacts}
-            setContacts={setContacts}
-            activeChat={activeChat}
-            setActiveChat={setActiveChat}
-            onlineUsers={onlineUsers}
-            onLogout={handleLogout}
-            onInitiateCall={webrtc.initiateCall}
-            fetchContacts={fetchContacts}
-            onProfileUpdate={handleProfileUpdate}
-          />
+          <div className={`sidebar-container ${activeChat ? 'hidden-mobile' : ''}`}>
+            <Sidebar
+              currentUser={currentUser}
+              token={token}
+              contacts={contacts}
+              setContacts={setContacts}
+              activeChat={activeChat}
+              setActiveChat={setActiveChat}
+              onlineUsers={onlineUsers}
+              onLogout={handleLogout}
+              onInitiateCall={webrtc.initiateCall}
+              fetchContacts={fetchContacts}
+              onProfileUpdate={handleProfileUpdate}
+            />
+          </div>
 
           {/* Chat Panel / Main body */}
+          <div className={`chat-container ${!activeChat ? 'hidden-mobile' : ''}`}>
           {activeChat ? (
             <ChatWindow
               activeChat={activeChat}
@@ -234,20 +237,22 @@ export default function App() {
               socket={socket}
               onlineUsers={onlineUsers}
               onInitiateCall={webrtc.initiateCall}
+              onBack={() => setActiveChat(null)}
             />
           ) : (
             <div style={styles.welcomePanel}>
               <div style={styles.welcomeIconRing}>
                 <Shield size={44} style={{ color: '#10b981' }} />
               </div>
-              <h2 style={styles.welcomeTitle}>HeroChat Dashboard</h2>
+              <h2 style={styles.welcomeTitle}>Chatify Dashboard</h2>
               <p style={styles.welcomeText}>Select an active contact or search above to initiate a secure encrypted message or peer-to-peer call.</p>
               <div style={styles.badgeRow}>
                 <span style={styles.badge}><MessageSquare size={12} style={{ marginRight: '4px' }} /> WebSocket Messages</span>
                 <span style={styles.badge}><PhoneCall size={12} style={{ marginRight: '4px' }} /> WebRTC P2P Call</span>
               </div>
             </div>
-          )}
+            )}
+          </div>
 
           {/* Global calling UI overlay */}
           <CallOverlay

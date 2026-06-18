@@ -95,7 +95,7 @@ export default function LoginRegister({ onLogin }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 10.742h.008v.008h-.008v-.008zm.37 3.078a5.978 5.978 0 01-.549-2.097 5.978 5.978 0 012.097-.549c.813-.082 1.625-.082 2.438 0a5.978 5.978 0 012.097.549 5.978 5.978 0 01-.549 2.097 8.016 8.016 0 01-5.534 0zm0 0l-1.077 1.077M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </div>
-          <h2 style={styles.title}>HeroChat</h2>
+          <h2 style={styles.title}>Chatify</h2>
           <p style={styles.subtitle}>Secure End-to-End Voice & Messaging</p>
         </div>
 
