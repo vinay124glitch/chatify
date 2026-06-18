@@ -109,14 +109,14 @@ io.on('connection', async (socket) => {
       `SELECT DISTINCT sender_id FROM messages WHERE receiver_id = ? AND status = 'sent'`,
       [userId]
     );
-    
+
     if (offlineMsgs.length > 0) {
       // Mark as delivered in DB
       await db.run(
         `UPDATE messages SET status = 'delivered' WHERE receiver_id = ? AND status = 'sent'`,
         [userId]
       );
-      
+
       // Notify senders
       offlineMsgs.forEach(item => {
         sendToUser(item.sender_id, 'message_status_update', {
@@ -136,7 +136,7 @@ io.on('connection', async (socket) => {
 
   // Handle messages
   socket.on('send_message', async (data, callback) => {
-    const { receiverId, content, attachmentUrl, attachmentType, attachmentName, isViewOnce } = data;
+    const { receiverId, content, attachmentUrl, attachmentType, attachmentName, isViewOnce, replyToMessageId } = data;
     if (!receiverId || (!content && !attachmentUrl)) return;
 
     try {
@@ -145,9 +145,38 @@ io.on('connection', async (socket) => {
       const status = isOnline ? 'delivered' : 'sent';
       const viewOnceVal = isViewOnce ? true : false;
 
+      let reply_to_sender_id = null;
+      let reply_to_sender_name = null;
+      let reply_to_text = null;
+      let reply_to_message_id = null;
+
+      if (replyToMessageId) {
+        const originalMessage = await db.get(
+          'SELECT sender_id, content, attachment_type, attachment_name FROM messages WHERE id = ?',
+          [replyToMessageId]
+        );
+        if (originalMessage) {
+          reply_to_message_id = Number(replyToMessageId);
+          reply_to_sender_id = originalMessage.sender_id;
+          const senderUser = await db.get('SELECT display_name FROM users WHERE id = ?', [originalMessage.sender_id]);
+          reply_to_sender_name = senderUser ? senderUser.display_name : 'Unknown';
+          if (originalMessage.attachment_type === 'sticker') {
+            reply_to_text = 'Sticker';
+          } else if (originalMessage.attachment_type === 'image') {
+            reply_to_text = originalMessage.content ? originalMessage.content : 'Photo';
+          } else if (originalMessage.attachment_type === 'video') {
+            reply_to_text = originalMessage.content ? originalMessage.content : 'Video';
+          } else if (originalMessage.attachment_type === 'document') {
+            reply_to_text = originalMessage.attachment_name || 'Document';
+          } else {
+            reply_to_text = originalMessage.content || 'Message';
+          }
+        }
+      }
+
       const result = await db.run(
-        'INSERT INTO messages (sender_id, receiver_id, content, status, attachment_url, attachment_type, attachment_name, is_view_once) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, targetUserId, content || '', status, attachmentUrl || null, attachmentType || null, attachmentName || null, viewOnceVal]
+        'INSERT INTO messages (sender_id, receiver_id, content, status, attachment_url, attachment_type, attachment_name, reply_to_message_id, reply_to_sender_id, reply_to_sender_name, reply_to_text, is_view_once) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [userId, targetUserId, content || '', status, attachmentUrl || null, attachmentType || null, attachmentName || null, reply_to_message_id, reply_to_sender_id, reply_to_sender_name, reply_to_text, viewOnceVal]
       );
 
       const message = {
@@ -159,6 +188,10 @@ io.on('connection', async (socket) => {
         attachment_url: attachmentUrl || null,
         attachment_type: attachmentType || null,
         attachment_name: attachmentName || null,
+        reply_to_message_id,
+        reply_to_sender_id,
+        reply_to_sender_name,
+        reply_to_text,
         is_view_once: viewOnceVal,
         is_opened: false,
         created_at: new Date().toISOString()
@@ -215,7 +248,7 @@ io.on('connection', async (socket) => {
         `UPDATE messages SET is_opened = TRUE WHERE id = ? AND receiver_id = ?`,
         [messageId, userId]
       );
-      
+
       // Notify the sender that it was opened
       sendToUser(Number(senderId), 'view_once_opened', {
         messageId,
@@ -287,7 +320,7 @@ io.on('connection', async (socket) => {
     const { receiverId, sdpOffer, type } = data;
     const targetUserId = Number(receiverId);
     console.log(`Call request from ${userId} to ${targetUserId} (Type: ${type})`);
-    
+
     const isOnline = sendToUser(targetUserId, 'incoming_call', {
       callerId: userId,
       callerName: socket.username,
@@ -320,7 +353,7 @@ io.on('connection', async (socket) => {
     const targetUserId = Number(callerId);
     console.log(`Call rejected by ${userId} for caller ${targetUserId}`);
     sendToUser(targetUserId, 'call_rejected', { calleeId: userId });
-    
+
     // Log rejected call
     db.run(
       'INSERT INTO call_logs (caller_id, receiver_id, type, status, duration) VALUES (?, ?, ?, ?, ?)',

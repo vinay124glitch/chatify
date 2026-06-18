@@ -28,16 +28,16 @@ function convertSql(sql) {
 async function run(sql, params = []) {
   const pgSql = convertSql(sql);
   let finalSql = pgSql;
-  if (finalSql.trim().toUpperCase().startsWith('INSERT') && 
-      !finalSql.toUpperCase().includes('RETURNING') &&
-      !finalSql.toUpperCase().includes('INTO CONTACTS')) {
+  if (finalSql.trim().toUpperCase().startsWith('INSERT') &&
+    !finalSql.toUpperCase().includes('RETURNING') &&
+    !finalSql.toUpperCase().includes('INTO CONTACTS')) {
     finalSql += ' RETURNING id';
   }
   try {
     const res = await pool.query(finalSql, params);
-    return { 
+    return {
       id: res.rows && res.rows.length > 0 ? res.rows[0].id : null,
-      changes: res.rowCount 
+      changes: res.rowCount
     };
   } catch (err) {
     throw err;
@@ -92,12 +92,30 @@ async function initDb() {
       attachment_url TEXT,
       attachment_type TEXT,
       attachment_name TEXT,
+      reply_to_message_id INTEGER,
+      reply_to_sender_id INTEGER,
+      reply_to_sender_name TEXT,
+      reply_to_text TEXT,
       is_view_once BOOLEAN DEFAULT FALSE,
       is_opened BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL
     )
+  `);
+
+  await run(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_message_id INTEGER;
+  `);
+  await run(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_sender_id INTEGER;
+  `);
+  await run(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_sender_name TEXT;
+  `);
+  await run(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_text TEXT;
   `);
 
   await run(`

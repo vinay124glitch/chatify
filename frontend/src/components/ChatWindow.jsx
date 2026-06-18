@@ -90,12 +90,12 @@ const uploadFileToBackend = async (fileOrBlob, fileName, token) => {
   console.log('[BackendUpload] Starting fallback upload to backend...');
   try {
     const formData = new FormData();
-    const file = fileOrBlob instanceof File 
-      ? fileOrBlob 
+    const file = fileOrBlob instanceof File
+      ? fileOrBlob
       : new File([fileOrBlob], fileName || 'upload.jpg', { type: fileOrBlob.type || 'application/octet-stream' });
-    
+
     formData.append('file', file);
-    
+
     const res = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
       headers: {
@@ -103,7 +103,7 @@ const uploadFileToBackend = async (fileOrBlob, fileName, token) => {
       },
       body: formData
     });
-    
+
     if (!res.ok) {
       throw new Error(`Server returned status ${res.status}`);
     }
@@ -122,13 +122,13 @@ const uploadFileToFirebase = async (fileOrBlob, path, token) => {
   try {
     const storageRef = ref(storage, path);
     console.log('[FirebaseUpload] Uploading bytes to Firebase Storage...');
-    
+
     // Add a timeout wrapper for uploadBytes to prevent hanging forever
     const uploadPromise = uploadBytes(storageRef, fileOrBlob);
-    const timeoutPromise = new Promise((_, reject) => 
+    const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Firebase upload timed out after 15 seconds. Please check your storage bucket rules.')), 15000)
     );
-    
+
     await Promise.race([uploadPromise, timeoutPromise]);
     console.log('[FirebaseUpload] Bytes uploaded successfully. Fetching download URL...');
 
@@ -173,7 +173,9 @@ export default function ChatWindow({
   const [showStickers, setShowStickers] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [customStickers, setCustomStickers] = useState([]);
+  const [replyToMessage, setReplyToMessage] = useState(null);
   const customStickerInputRef = useRef(null);
+  const replyDragRef = useRef({ startX: 0, activeId: null, triggered: false });
 
   // Reaction states
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
@@ -236,7 +238,7 @@ export default function ChatWindow({
     if (activeChat) {
       loadMessageHistory();
       handleRemoveFile(); // Clear any unsent attachments when switching chats
-      
+
       // Notify database and contact that we read their messages
       if (socket) {
         socket.emit('mark_read', { senderId: activeChat.id });
@@ -256,7 +258,7 @@ export default function ChatWindow({
           return [...prev, msg];
         });
         socket.emit('mark_read', { senderId: activeChat.id });
-        
+
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 50);
@@ -348,6 +350,26 @@ export default function ChatWindow({
     setActiveReactionMsgId(null);
   };
 
+  const startReplyDrag = (msg, clientX) => {
+    replyDragRef.current = { startX: clientX, activeId: msg.id, triggered: false };
+  };
+
+  const moveReplyDrag = (clientX) => {
+    const { startX, activeId, triggered } = replyDragRef.current;
+    if (!activeId || triggered) return;
+    if (clientX - startX > 70) {
+      replyDragRef.current.triggered = true;
+      const msg = messages.find((m) => m.id === activeId);
+      if (msg) {
+        setReplyToMessage(msg);
+      }
+    }
+  };
+
+  const endReplyDrag = () => {
+    replyDragRef.current = { startX: 0, activeId: null, triggered: false };
+  };
+
   // Handle key typing triggers
   const handleTyping = () => {
     if (!socket || !activeChat) return;
@@ -404,9 +426,9 @@ export default function ChatWindow({
 
       const saveRes = await fetch(`${API_BASE_URL}/users/stickers`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ url })
       });
@@ -439,7 +461,7 @@ export default function ChatWindow({
       try {
         const mime = selectedFile.type;
         const uniqueFileName = `${currentUser.id}_${Date.now()}_${selectedFile.name}`;
-        
+
         if (mime.startsWith('image/')) {
           attachmentType = 'image';
           const base64 = await compressImage(selectedFile, 800, 800, 0.7);
@@ -473,7 +495,8 @@ export default function ChatWindow({
       attachmentUrl,
       attachmentType,
       attachmentName,
-      isViewOnce: isViewOnce && attachmentType === 'image'
+      isViewOnce: isViewOnce && attachmentType === 'image',
+      replyToMessageId: replyToMessage ? replyToMessage.id : null
     }, (ackMsg) => {
       if (ackMsg) {
         setMessages((prev) => {
@@ -507,7 +530,8 @@ export default function ChatWindow({
       content: '', // no text
       attachmentUrl: url,
       attachmentType: 'sticker',
-      attachmentName: 'Sticker'
+      attachmentName: 'Sticker',
+      replyToMessageId: replyToMessage ? replyToMessage.id : null
     }, (ackMsg) => {
       if (ackMsg) {
         setMessages((prev) => {
@@ -519,6 +543,7 @@ export default function ChatWindow({
         }, 50);
       }
     });
+    setReplyToMessage(null);
   };
 
   // Render message status checkmarks
@@ -547,7 +572,7 @@ export default function ChatWindow({
       <div style={styles.chatHeader} className="glass-panel chat-header-mobile">
         <div style={styles.userInfo}>
           <button className="mobile-back-btn" onClick={onBack} title="Back to Contacts">
-             <ChevronLeft size={24} />
+            <ChevronLeft size={24} />
           </button>
           <div style={styles.avatarWrapper}>
             <img src={getAvatarUrl(activeChat.avatar_url, activeChat.display_name)} alt={activeChat.display_name} style={styles.avatar} />
@@ -641,6 +666,12 @@ export default function ChatWindow({
                 )}
 
                 <div
+                  onMouseDown={(e) => startReplyDrag(msg, e.clientX)}
+                  onTouchStart={(e) => startReplyDrag(msg, e.touches[0]?.clientX)}
+                  onMouseMove={(e) => moveReplyDrag(e.clientX)}
+                  onTouchMove={(e) => moveReplyDrag(e.touches[0]?.clientX)}
+                  onMouseUp={endReplyDrag}
+                  onTouchEnd={endReplyDrag}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id);
@@ -683,6 +714,12 @@ export default function ChatWindow({
                     </div>
                   )}
 
+                  {msg.reply_to_message_id && (
+                    <div style={styles.quotedReply}>
+                      <div style={styles.quotedReplySender}>{msg.reply_to_sender_name || 'Reply'}</div>
+                      <div style={styles.quotedReplyText}>{msg.reply_to_text || 'Replied message'}</div>
+                    </div>
+                  )}
                   {msg.attachment_url && (
                     <div style={styles.attachmentContainer}>
                       {msg.attachment_type === 'sticker' && (
@@ -695,11 +732,11 @@ export default function ChatWindow({
 
                       {msg.attachment_type === 'image' && (
                         msg.is_view_once ? (
-                          <div 
-                            style={{ 
-                              ...styles.viewOnceBubble, 
-                              opacity: msg.is_opened ? 0.5 : 1, 
-                              cursor: (!isMe && !msg.is_opened) ? 'pointer' : 'default' 
+                          <div
+                            style={{
+                              ...styles.viewOnceBubble,
+                              opacity: msg.is_opened ? 0.5 : 1,
+                              cursor: (!isMe && !msg.is_opened) ? 'pointer' : 'default'
                             }}
                             onClick={() => {
                               if (!isMe && !msg.is_opened) {
@@ -725,7 +762,7 @@ export default function ChatWindow({
                           />
                         )
                       )}
-                      
+
                       {msg.attachment_type === 'video' && (
                         <video
                           src={getMediaUrl(msg.attachment_url)}
@@ -833,8 +870,31 @@ export default function ChatWindow({
 
       {/* Message Input & File preview bar */}
       <div style={styles.bottomBarContainer} className="glass-panel">
-        
+
         {/* Selected file preview tray */}
+        {replyToMessage && (
+          <div style={styles.replyComposer}>
+            <div style={styles.replyComposerHeader}>
+              <span style={styles.replyComposerLabel}>Replying to {replyToMessage.sender_id === currentUser.id ? 'You' : activeChat.display_name}</span>
+              <button
+                type="button"
+                onClick={() => setReplyToMessage(null)}
+                style={styles.replyComposerCloseBtn}
+                title="Cancel reply"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={styles.replyComposerText}>
+              {replyToMessage.content ? replyToMessage.content : (
+                replyToMessage.attachment_type === 'image' ? 'Photo' :
+                  replyToMessage.attachment_type === 'video' ? 'Video' :
+                    replyToMessage.attachment_type === 'sticker' ? 'Sticker' :
+                      replyToMessage.attachment_name || 'Attachment'
+              )}
+            </div>
+          </div>
+        )}
         {selectedFile && (
           <div style={styles.previewTray}>
             {filePreview ? (
@@ -909,7 +969,7 @@ export default function ChatWindow({
             >
               <ImageIcon size={18} />
             </button>
-            
+
             {showStickers && (
               <div style={styles.stickerPickerOverlay} className="glass-panel">
                 <div style={styles.stickerPickerHeader}>
@@ -920,8 +980,8 @@ export default function ChatWindow({
                 </div>
                 <div style={styles.stickerGrid}>
                   {/* Upload Sticker Button */}
-                  <div 
-                    style={styles.addStickerThumb} 
+                  <div
+                    style={styles.addStickerThumb}
                     onClick={() => customStickerInputRef.current?.click()}
                     className="clickable"
                   >
@@ -934,7 +994,7 @@ export default function ChatWindow({
                     style={{ display: 'none' }}
                     accept="image/*"
                   />
-                  
+
                   {/* Custom Stickers */}
                   {customStickers.map((url, i) => (
                     <img
@@ -995,7 +1055,7 @@ export default function ChatWindow({
             style={styles.inputField}
             disabled={uploading}
           />
-          
+
           <button
             type="submit"
             style={{
@@ -1010,18 +1070,18 @@ export default function ChatWindow({
           </button>
         </form>
       </div>
-      
+
       {/* View Once Image Overlay */}
       {viewOnceImage && (
         <div style={styles.viewOnceOverlay}>
           <div style={styles.viewOnceHeader}>
             <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>View Once Photo</span>
-            <button 
+            <button
               onClick={() => {
                 socket.emit('open_view_once', { messageId: viewOnceImage.id, senderId: activeChat.id });
                 setMessages(prev => prev.map(m => m.id === viewOnceImage.id ? { ...m, is_opened: 1 } : m));
                 setViewOnceImage(null);
-              }} 
+              }}
               style={styles.trayRemoveBtn}
             >
               <X size={24} />
@@ -1463,5 +1523,62 @@ const styles = {
     fontWeight: '600',
     color: 'var(--text-secondary)',
     paddingLeft: '2px'
+  },
+  replyComposer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    margin: '12px 24px 0',
+    padding: '12px 14px',
+    borderRadius: '16px',
+    background: 'rgba(16, 185, 129, 0.08)',
+    border: '1px solid rgba(16, 185, 129, 0.22)'
+  },
+  replyComposerHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '10px'
+  },
+  replyComposerLabel: {
+    fontSize: '13px',
+    color: '#10b981',
+    fontWeight: '600'
+  },
+  replyComposerCloseBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#ffffff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  replyComposerText: {
+    fontSize: '13px',
+    color: '#e2e8f0',
+    lineHeight: '1.4',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  quotedReply: {
+    marginBottom: '10px',
+    padding: '10px 12px',
+    borderLeft: '3px solid #10b981',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    color: 'var(--text-secondary)'
+  },
+  quotedReplySender: {
+    fontSize: '11px',
+    fontWeight: '700',
+    color: 'var(--text-primary)',
+    marginBottom: '4px'
+  },
+  quotedReplyText: {
+    fontSize: '13px',
+    color: 'var(--text-secondary)',
+    lineHeight: '1.4'
   }
 };
