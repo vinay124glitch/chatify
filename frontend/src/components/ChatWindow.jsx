@@ -848,10 +848,10 @@ export default function ChatWindow({
                   {customStickers.map((url, i) => (
                     <img
                       key={`custom-${i}`}
-                      src={url.startsWith('http') ? url : `${API_BASE_URL}${url}`}
+                      src={getMediaUrl(url)}
                       alt={`custom-sticker-${i}`}
                       style={styles.stickerThumb}
-                      onClick={() => handleSendSticker(url.startsWith('http') ? url : `${API_BASE_URL}${url}`)}
+                      onClick={() => handleSendSticker(getMediaUrl(url))}
                       className="clickable"
                     />
                   ))}
