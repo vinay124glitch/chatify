@@ -94,6 +94,15 @@ export default function Sidebar({
     }
   };
 
+  // Sync form states with currentUser prop updates
+  useEffect(() => {
+    if (currentUser) {
+      setProfileName(currentUser.display_name || '');
+      setProfileAbout(currentUser.about || 'Hey there! I am using Chatify.');
+      setProfileAvatar(currentUser.avatar_url || '');
+    }
+  }, [currentUser]);
+
   // Re-run triggers on tab switches
   useEffect(() => {
     if (activeTab === 'calls') {
