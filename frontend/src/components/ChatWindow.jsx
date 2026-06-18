@@ -5,6 +5,62 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { API_BASE_URL } from '../config';
 
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(base64);
+      };
+      img.onerror = () => {
+        resolve(null);
+      };
+    };
+    reader.onerror = () => resolve(null);
+  });
+};
+
+const readFileAsBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+const getMediaUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
 export default function ChatWindow({
   activeChat,
   token,
@@ -254,30 +310,11 @@ export default function ChatWindow({
 
     try {
       setUploading(true);
-      let url = null;
-      
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!uploadRes.ok) {
-          throw new Error('Local server upload failed');
-        }
-        
-        const uploadData = await uploadRes.json();
-        url = uploadData.url;
-      } else {
-        const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `stickers/${uniqueName}`);
-        await uploadBytes(storageRef, file);
-        url = await getDownloadURL(storageRef);
+      const base64 = await compressImage(file, 200, 200, 0.7);
+      if (!base64) {
+        throw new Error('Failed to compress sticker image');
       }
+      const url = base64;
 
       const saveRes = await fetch(`${API_BASE_URL}/users/stickers`, {
         method: 'POST',
@@ -310,40 +347,24 @@ export default function ChatWindow({
     let attachmentType = null;
     let attachmentName = null;
 
-    // 1. If file selected, upload first
+    // 1. If file selected, process to base64
     if (selectedFile) {
       setUploading(true);
       try {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocal) {
-          const formData = new FormData();
-          formData.append('file', selectedFile);
-          
-          const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
-            method: 'POST',
-            body: formData
-          });
-          
-          if (!uploadRes.ok) {
-            throw new Error('Local server upload failed');
-          }
-          
-          const uploadData = await uploadRes.json();
-          attachmentUrl = uploadData.url;
-        } else {
-          const uniqueName = `${Date.now()}-${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-          const storageRef = ref(storage, `attachments/${uniqueName}`);
-          await uploadBytes(storageRef, selectedFile);
-          attachmentUrl = await getDownloadURL(storageRef);
-        }
-        
         const mime = selectedFile.type;
         if (mime.startsWith('image/')) {
           attachmentType = 'image';
+          attachmentUrl = await compressImage(selectedFile, 800, 800, 0.7);
         } else if (mime.startsWith('video/')) {
           attachmentType = 'video';
+          attachmentUrl = await readFileAsBase64(selectedFile);
         } else {
           attachmentType = 'document';
+          attachmentUrl = await readFileAsBase64(selectedFile);
+        }
+
+        if (!attachmentUrl) {
+          throw new Error('Failed to process attachment file');
         }
         attachmentName = selectedFile.name;
       } catch (err) {
@@ -575,7 +596,7 @@ export default function ChatWindow({
                     <div style={styles.attachmentContainer}>
                       {msg.attachment_type === 'sticker' && (
                         <img
-                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
+                          src={getMediaUrl(msg.attachment_url)}
                           alt="sticker"
                           style={{ width: '120px', height: '120px', display: 'block' }}
                         />
@@ -591,7 +612,7 @@ export default function ChatWindow({
                             }}
                             onClick={() => {
                               if (!isMe && !msg.is_opened) {
-                                const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`;
+                                const fullUrl = getMediaUrl(msg.attachment_url);
                                 setViewOnceImage({ id: msg.id, url: fullUrl });
                               }
                             }}
@@ -603,11 +624,11 @@ export default function ChatWindow({
                           </div>
                         ) : (
                           <img
-                            src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
+                            src={getMediaUrl(msg.attachment_url)}
                             alt={msg.attachment_name}
                             style={styles.bubbleImage}
                             onClick={() => {
-                              const fullUrl = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`;
+                              const fullUrl = getMediaUrl(msg.attachment_url);
                               window.open(fullUrl, '_blank');
                             }}
                           />
@@ -616,7 +637,7 @@ export default function ChatWindow({
                       
                       {msg.attachment_type === 'video' && (
                         <video
-                          src={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
+                          src={getMediaUrl(msg.attachment_url)}
                           controls
                           style={styles.bubbleVideo}
                         />
@@ -624,7 +645,7 @@ export default function ChatWindow({
 
                       {msg.attachment_type === 'document' && (
                         <a
-                          href={msg.attachment_url.startsWith('http') ? msg.attachment_url : `${API_BASE_URL}${msg.attachment_url}`}
+                          href={getMediaUrl(msg.attachment_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={styles.bubbleDoc}

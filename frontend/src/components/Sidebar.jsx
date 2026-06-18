@@ -4,6 +4,62 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { API_BASE_URL } from '../config';
 
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(base64);
+      };
+      img.onerror = () => {
+        resolve(null);
+      };
+    };
+    reader.onerror = () => resolve(null);
+  });
+};
+
+const readFileAsBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+const getMediaUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
 export default function Sidebar({
   currentUser,
   token,
@@ -199,29 +255,11 @@ export default function Sidebar({
 
     setProfileLoading(true);
     try {
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!uploadRes.ok) {
-          throw new Error('Local server upload failed');
-        }
-        
-        const uploadData = await uploadRes.json();
-        setProfileAvatar(uploadData.url);
-      } else {
-        const uniqueName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `avatars/${uniqueName}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        setProfileAvatar(url);
+      const base64 = await compressImage(file, 400, 400, 0.6);
+      if (!base64) {
+        throw new Error('Failed to compress avatar image');
       }
+      setProfileAvatar(base64);
     } catch (err) {
       alert(`Avatar upload failed: ${err.message}`);
     } finally {
@@ -297,30 +335,13 @@ export default function Sidebar({
     let mediaUrl = null;
 
     try {
-      // 1. If image, upload first
+      // 1. If image, compress and convert to base64
       if (statusType === 'image' && statusFile) {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocal) {
-          const formData = new FormData();
-          formData.append('file', statusFile);
-          
-          const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
-            method: 'POST',
-            body: formData
-          });
-          
-          if (!uploadRes.ok) {
-            throw new Error('Local server upload failed');
-          }
-          
-          const uploadData = await uploadRes.json();
-          mediaUrl = uploadData.url;
-        } else {
-          const uniqueName = `${Date.now()}-${statusFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-          const storageRef = ref(storage, `status/${uniqueName}`);
-          await uploadBytes(storageRef, statusFile);
-          mediaUrl = await getDownloadURL(storageRef);
+        const base64 = await compressImage(statusFile, 800, 800, 0.7);
+        if (!base64) {
+          throw new Error('Failed to compress status image');
         }
+        mediaUrl = base64;
       }
 
       // 2. Publish status details
@@ -900,7 +921,7 @@ export default function Sidebar({
             ) : (
               /* Render Image story */
               <div style={styles.fullStoryImageWrapper}>
-                <img src={activeStory.media_url.startsWith('http') ? activeStory.media_url : `${API_BASE_URL}${activeStory.media_url}`} alt="status story" style={styles.fullStoryImage} />
+                <img src={getMediaUrl(activeStory.media_url)} alt="status story" style={styles.fullStoryImage} />
                 {activeStory.content && activeStory.content.trim() !== '' && (
                   <div style={styles.fullStoryCaptionCard}>
                     <p>{activeStory.content}</p>
