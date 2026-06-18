@@ -60,6 +60,28 @@ const getMediaUrl = (url) => {
   return `${API_BASE_URL}${url}`;
 };
 
+// Fallback avatar generator using UI Avatars
+const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?background=10b981&color=fff&bold=true&size=200&name=';
+const getAvatarUrl = (avatarUrl, displayName) => {
+  if (avatarUrl && avatarUrl.trim() !== '') return avatarUrl;
+  return `${DEFAULT_AVATAR}${encodeURIComponent(displayName || 'U')}`;
+};
+
+// Upload a base64/blob image to Firebase Storage and return the download URL
+const uploadImageToFirebase = async (base64String, path) => {
+  try {
+    const response = await fetch(base64String);
+    const blob = await response.blob();
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, blob);
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+  } catch (err) {
+    console.error('Firebase upload failed:', err);
+    throw err;
+  }
+};
+
 export default function Sidebar({
   currentUser,
   token,
@@ -259,7 +281,12 @@ export default function Sidebar({
       if (!base64) {
         throw new Error('Failed to compress avatar image');
       }
-      setProfileAvatar(base64);
+      // Upload to Firebase Storage and get a permanent URL
+      const firebaseUrl = await uploadImageToFirebase(
+        base64,
+        `avatars/${currentUser.id}_${Date.now()}.jpg`
+      );
+      setProfileAvatar(firebaseUrl);
     } catch (err) {
       alert(`Avatar upload failed: ${err.message}`);
     } finally {
@@ -335,13 +362,16 @@ export default function Sidebar({
     let mediaUrl = null;
 
     try {
-      // 1. If image, compress and convert to base64
+      // 1. If image, compress and upload to Firebase Storage
       if (statusType === 'image' && statusFile) {
         const base64 = await compressImage(statusFile, 800, 800, 0.7);
         if (!base64) {
           throw new Error('Failed to compress status image');
         }
-        mediaUrl = base64;
+        mediaUrl = await uploadImageToFirebase(
+          base64,
+          `statuses/${currentUser.id}_${Date.now()}.jpg`
+        );
       }
 
       // 2. Publish status details
@@ -413,7 +443,7 @@ export default function Sidebar({
       {/* Profile Header */}
       <div style={styles.profileHeader}>
         <div style={styles.avatarWrapper} onClick={() => setIsProfileOpen(true)} className="clickable" title="Edit Profile">
-          <img src={currentUser.avatar_url} alt={currentUser.display_name} style={styles.avatar} />
+          <img src={getAvatarUrl(currentUser.avatar_url, currentUser.display_name)} alt={currentUser.display_name} style={styles.avatar} />
           <div style={styles.editAvatarIconOverlay}>
             <Camera size={12} style={{ color: '#ffffff' }} />
           </div>
@@ -455,7 +485,7 @@ export default function Sidebar({
                 onClick={() => handleSelectSearchResult(user)}
                 className="clickable"
               >
-                <img src={user.avatar_url} alt={user.display_name} style={styles.smallAvatar} />
+                <img src={getAvatarUrl(user.avatar_url, user.display_name)} alt={user.display_name} style={styles.smallAvatar} />
                 <div style={{ flex: 1 }}>
                   <div style={styles.searchResultName} className="truncate-text">{user.display_name}</div>
                   <div style={styles.searchResultUsername}>@{user.username}</div>
@@ -531,7 +561,7 @@ export default function Sidebar({
                   className="clickable"
                 >
                   <div style={styles.avatarWrapper}>
-                    <img src={contact.avatar_url} alt={contact.display_name} style={styles.avatar} />
+                    <img src={getAvatarUrl(contact.avatar_url, contact.display_name)} alt={contact.display_name} style={styles.avatar} />
                     <div
                       className={`status-indicator ${isOnline ? 'status-online' : 'status-offline'}`}
                       style={styles.presenceIndicator}
@@ -564,10 +594,10 @@ export default function Sidebar({
                     onClick={() => setActiveStory(ownGroup.stories[0])}
                     className="clickable"
                   >
-                    <img src={currentUser.avatar_url} alt="My Status" style={styles.statusAvatarImg} />
+                    <img src={getAvatarUrl(currentUser.avatar_url, currentUser.display_name)} alt="My Status" style={styles.statusAvatarImg} />
                   </div>
                 ) : (
-                  <img src={currentUser.avatar_url} alt="My Status" style={styles.statusAvatarImgNoRing} />
+                  <img src={getAvatarUrl(currentUser.avatar_url, currentUser.display_name)} alt="My Status" style={styles.statusAvatarImgNoRing} />
                 )}
                 <button
                   onClick={() => setIsStatusCreatorOpen(true)}
@@ -603,7 +633,7 @@ export default function Sidebar({
                     className="clickable"
                   >
                     <div style={styles.statusRingGreen}>
-                      <img src={group.avatar_url} alt={group.display_name} style={styles.statusAvatarImg} />
+                      <img src={getAvatarUrl(group.avatar_url, group.display_name)} alt={group.display_name} style={styles.statusAvatarImg} />
                     </div>
                     <div style={{ flex: 1, marginLeft: '12px' }}>
                       <h4 style={{ fontSize: '14.5px', fontWeight: '600', color: '#ffffff' }}>{group.display_name}</h4>
@@ -633,7 +663,7 @@ export default function Sidebar({
 
               return (
                 <div key={log.id} style={styles.callLogItem}>
-                  <img src={peerAvatar} alt={peerName} style={styles.smallAvatar} />
+                  <img src={getAvatarUrl(peerAvatar, peerName)} alt={peerName} style={styles.smallAvatar} />
                   <div style={{ flex: 1, marginLeft: '12px' }}>
                     <div style={styles.callLogName}>{peerName}</div>
                     <div style={styles.callLogTime}>
@@ -687,7 +717,7 @@ export default function Sidebar({
             <form onSubmit={handleSaveProfile} style={styles.profileForm}>
               <div style={styles.avatarEditContainer}>
                 <div style={styles.avatarBigWrapper} onClick={() => fileInputRef.current.click()} className="clickable">
-                  <img src={profileAvatar} alt="edit avatar" style={styles.bigAvatar} />
+                  <img src={getAvatarUrl(profileAvatar, profileName)} alt="edit avatar" style={styles.bigAvatar} />
                   <div style={styles.cameraOverlay}>
                     <Camera size={20} />
                   </div>
@@ -895,7 +925,7 @@ export default function Sidebar({
           </div>
 
           <div style={styles.storyHeader}>
-            <img src={activeStory.avatar_url} alt={activeStory.display_name} style={styles.storyHeaderAvatar} />
+            <img src={getAvatarUrl(activeStory.avatar_url, activeStory.display_name)} alt={activeStory.display_name} style={styles.storyHeaderAvatar} />
             <div style={{ flex: 1, marginLeft: '12px' }}>
               <div style={{ fontSize: '14.5px', fontWeight: '600', color: '#ffffff' }}>{activeStory.display_name}</div>
               <span style={{ fontSize: '11px', color: '#cbd5e1' }}>

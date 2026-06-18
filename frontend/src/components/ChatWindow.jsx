@@ -61,6 +61,13 @@ const getMediaUrl = (url) => {
   return `${API_BASE_URL}${url}`;
 };
 
+// Fallback avatar generator using UI Avatars
+const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?background=10b981&color=fff&bold=true&size=200&name=';
+const getAvatarUrl = (avatarUrl, displayName) => {
+  if (avatarUrl && avatarUrl.trim() !== '') return avatarUrl;
+  return `${DEFAULT_AVATAR}${encodeURIComponent(displayName || 'U')}`;
+};
+
 export default function ChatWindow({
   activeChat,
   token,
@@ -459,7 +466,7 @@ export default function ChatWindow({
              <ChevronLeft size={24} />
           </button>
           <div style={styles.avatarWrapper}>
-            <img src={activeChat.avatar_url} alt={activeChat.display_name} style={styles.avatar} />
+            <img src={getAvatarUrl(activeChat.avatar_url, activeChat.display_name)} alt={activeChat.display_name} style={styles.avatar} />
             <div
               className={`status-indicator ${isOnline ? 'status-online' : 'status-offline'}`}
               style={styles.presenceBadge}
