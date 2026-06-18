@@ -58,14 +58,14 @@ router.post('/contacts/add', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Add contact relation (insert or ignore if exists)
+    // Add contact relation (insert or do nothing if exists)
     await db.run(
-      'INSERT OR IGNORE INTO contacts (user_id, contact_id) VALUES (?, ?)',
+      'INSERT INTO contacts (user_id, contact_id) VALUES (?, ?) ON CONFLICT (user_id, contact_id) DO NOTHING',
       [req.user.id, contact_id]
     );
     // Also add reciprocal relation for easier chatting
     await db.run(
-      'INSERT OR IGNORE INTO contacts (user_id, contact_id) VALUES (?, ?)',
+      'INSERT INTO contacts (user_id, contact_id) VALUES (?, ?) ON CONFLICT (user_id, contact_id) DO NOTHING',
       [contact_id, req.user.id]
     );
 
