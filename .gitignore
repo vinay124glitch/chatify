@@ -5,3 +5,4 @@ database.sqlite
 uploads/
 .DS_Store
 frontend/android/
+node_modules
