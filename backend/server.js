@@ -11,6 +11,32 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
+// FCM push notification helper (uses Firebase HTTP Legacy API)
+const sendFCMPush = async (fcmToken, title, body) => {
+  const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
+  if (!FCM_SERVER_KEY || !fcmToken) return;
+  try {
+    const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `key=${FCM_SERVER_KEY}`
+      },
+      body: JSON.stringify({
+        to: fcmToken,
+        notification: { title, body, sound: 'default' },
+        priority: 'high'
+      })
+    });
+    const data = await response.json();
+    if (data.failure) {
+      console.warn('[FCM] Push send failed for token:', fcmToken, data);
+    }
+  } catch (err) {
+    console.error('[FCM] Error sending push:', err);
+  }
+};
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -41,7 +67,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  const host = req.get('host') || '';
+  const protocol = (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https';
+  const fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
   res.json({ success: true, url: fileUrl });
 });
 
@@ -200,6 +228,23 @@ io.on('connection', async (socket) => {
       // Send to recipient
       if (isOnline) {
         sendToUser(targetUserId, 'receive_message', message);
+      } else {
+        // Send FCM push notification to offline user
+        try {
+          const senderUser = await db.get('SELECT display_name FROM users WHERE id = ?', [userId]);
+          const senderName = senderUser ? senderUser.display_name : 'Someone';
+          const pushBody = attachmentType === 'image' ? '📷 Photo'
+            : attachmentType === 'video' ? '🎥 Video'
+            : attachmentType === 'document' ? '📄 Document'
+            : (content || 'New message');
+
+          const fcmRows = await db.all('SELECT token FROM fcm_tokens WHERE user_id = ?', [targetUserId]);
+          for (const row of fcmRows) {
+            await sendFCMPush(row.token, senderName, pushBody);
+          }
+        } catch (pushErr) {
+          console.warn('[FCM] Push notification failed:', pushErr.message);
+        }
       }
 
       // Confirm to sender (using socket callback or custom event)

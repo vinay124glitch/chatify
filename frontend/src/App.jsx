@@ -7,6 +7,8 @@ import CallOverlay from './components/CallOverlay';
 import useWebRTC from './hooks/useWebRTC';
 import { Zap, MessageSquare, PhoneCall } from 'lucide-react';
 import { API_BASE_URL } from './config';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('whatsapp_token'));
@@ -159,20 +161,58 @@ export default function App() {
           });
         });
 
-        // 3. Trigger native browser push overlay
-        if (Notification.permission === 'granted' && document.hidden) {
-          // Look up sender name
-          const contact = contacts.find(c => Number(c.id) === senderId);
-          const senderName = contact ? contact.display_name : `User ${senderId}`;
-          new Notification(senderName, {
-            body: msg.content || 'Sent an attachment'
-          });
-        }
+        // 3. Trigger in-app notification beep only (FCM handles background push)
+        // Foreground toast can be triggered here if needed
       });
 
-      // Request browser notification permissions
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+      // === FCM Push Notification Setup (Android native via Capacitor) ===
+      if (Capacitor.isNativePlatform()) {
+        // Request permission from user
+        PushNotifications.requestPermissions().then(result => {
+          if (result.receive === 'granted') {
+            PushNotifications.register();
+          }
+        });
+
+        // When FCM token is received, save it to the backend
+        PushNotifications.addListener('registration', async (token) => {
+          console.log('[FCM] Token received:', token.value);
+          try {
+            const storedToken = localStorage.getItem('whatsapp_token');
+            if (storedToken) {
+              await fetch(`${API_BASE_URL}/users/fcm-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${storedToken}`
+                },
+                body: JSON.stringify({ fcm_token: token.value })
+              });
+            }
+          } catch (e) {
+            console.warn('[FCM] Failed to save token to backend:', e);
+          }
+        });
+
+        // Handle push notification received while app is in foreground
+        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          console.log('[FCM] Push received in foreground:', notification);
+        });
+
+        // Handle tap on push notification (app was in background/closed)
+        PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+          console.log('[FCM] Push action performed:', action);
+        });
+
+        // Handle registration error
+        PushNotifications.addListener('registrationError', (err) => {
+          console.error('[FCM] Registration error:', err);
+        });
+      } else {
+        // Web / Desktop fallback: use browser Notification API
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
       }
 
       return () => {

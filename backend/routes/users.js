@@ -212,4 +212,24 @@ router.post('/stickers', authenticateToken, async (req, res) => {
   }
 });
 
+// Save or update FCM token for push notifications
+router.post('/fcm-token', authenticateToken, async (req, res) => {
+  const { fcm_token } = req.body;
+  if (!fcm_token) {
+    return res.status(400).json({ error: 'FCM token is required' });
+  }
+  try {
+    await db.run(
+      `INSERT INTO fcm_tokens (user_id, token)
+       VALUES (?, ?)
+       ON CONFLICT (user_id, token) DO UPDATE SET created_at = CURRENT_TIMESTAMP`,
+      [req.user.id, fcm_token]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Save FCM token error:', err);
+    res.status(500).json({ error: 'Failed to save FCM token' });
+  }
+});
+
 module.exports = router;
